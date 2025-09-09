@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 
-use crate::config::User;
+use crate::config::Session;
 
 fn de_str_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
 where
@@ -55,6 +55,7 @@ pub enum XRestrict {
 #[derive(Deserialize_repr)]
 #[repr(u8)]
 pub enum AIType {
+    Unspecified = 0,
     NonAI = 1,
     AI = 2,
 }
@@ -100,9 +101,9 @@ pub struct Bookmarks {
 }
 
 impl Bookmarks {
-    pub fn into_illusts(&mut self) -> impl Iterator<Item = Illust> {
-        let mut tags_map = std::mem::take(&mut self.bookmark_tags);
-        self.works.drain(..).map(move |work: BookmarkedWork| {
+    pub fn into_illusts(self) -> impl Iterator<Item = Illust> {
+        let mut tags_map = self.bookmark_tags;
+        self.works.into_iter().map(move |work: BookmarkedWork| {
             let state = if work.is_unlisted {
                 IllustState::Unlisted
             } else if work.is_masked {
@@ -121,11 +122,15 @@ impl Bookmarks {
                 update_date: work.update_date,
                 x_restrict: work.x_restrict,
             };
-            let bookmarked_tags = tags_map.remove(&work.id).unwrap();
+            let bookmarked_tags = tags_map.remove(&work.bookmark_data.id).unwrap_or_default();
             Illust {
+                id: work.id,
                 data,
                 state,
-                bookmarked_tags,
+                bookmark: IllustBookmarkState {
+                    tags: bookmarked_tags,
+                    private: work.bookmark_data.private,
+                }
             }
         })
     }
@@ -148,10 +153,10 @@ impl<T> Response<T> {
     }
 }
 
-pub async fn get_bookmarks_page(user: User, tag: Option<&str>, hidden: bool, offset: usize, limit: usize) -> anyhow::Result<Bookmarks> {
+pub async fn get_bookmarks_page(user: &Session, tag: Option<&str>, hidden: bool, offset: usize, limit: usize) -> anyhow::Result<Bookmarks> {
     let url = format!(
         "https://www.pixiv.net/ajax/user/{}/illusts/bookmarks",
-        user.id,
+        user.uid,
     );
 
     let client = reqwest::Client::new();
@@ -196,8 +201,61 @@ pub enum IllustData {
     }
 }
 
+impl IllustData {
+    pub fn display_title(&self) -> &str {
+        match self {
+            IllustData::Unknown => "(unknown)",
+            IllustData::Fetched { title, .. } => title,
+        }
+    }
+}
+
+pub struct IllustBookmarkState {
+    pub tags: Vec<String>,
+    pub private: bool,
+}
+
 pub struct Illust {
-    data: IllustData,
-    state: IllustState,
-    bookmarked_tags: Vec<String>,
+    pub id: u64,
+    pub data: IllustData,
+    pub state: IllustState,
+    pub bookmark: IllustBookmarkState,
+}
+
+pub async fn get_bookmarks(user: &Session, tag: Option<&str>, hidden: bool) -> anyhow::Result<BTreeMap<u64, Illust>> {
+    const LIMIT: usize = 48;
+    const DELAY_MS: i64 = 2500;
+    const DELAY_RANDOM_VAR_MS: i64 = 500;
+
+    let mut result = BTreeMap::new();
+    let mut offset = 0;
+
+    loop {
+        let batch = get_bookmarks_page(user, tag, hidden, offset, LIMIT).await?;
+        let total = batch.total;
+        let batch_size = batch.works.len();
+
+        result.extend(batch.into_illusts().map(|illust| (illust.id, illust)));
+        offset += batch_size;
+        if offset < total && batch_size == 0 {
+            tracing::warn!("Empty batch before reaching end of bookmark list.");
+        }
+
+        if offset >= total || batch_size == 0 {
+            if result.len() > total {
+                panic!("Sanity check: somehow fetched more than total");
+            }
+            if result.len() < total {
+                tracing::warn!("Fetched bookmarks is less than total. Bookmarks might be added during fetching.")
+            }
+
+            break;
+        }
+
+        let delay = std::time::Duration::from_millis((DELAY_MS + rand::random_range(-DELAY_RANDOM_VAR_MS..=DELAY_RANDOM_VAR_MS)) as u64);
+        tracing::info!("Fetched {}/{} bookmarks, sleeping for {:?}...", offset, total, delay);
+        tokio::time::sleep(delay).await;
+    }
+
+    Ok(result)
 }

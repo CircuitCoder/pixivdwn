@@ -134,10 +134,8 @@ impl Bookmarks {
                 IllustData::Unknown
             };
 
+            // Bookmark tags will be kept for unlisted/masked works
             let bookmarked_tags = tags_map.remove(&work.bookmark_data.id).unwrap_or_default();
-            if let IllustData::Unknown = data && !bookmarked_tags.is_empty() {
-                tracing::warn!("Bookmarked work {} is unlisted/masked but bookmark tags kept", work.id);
-            }
 
             Illust {
                 id: work.id,

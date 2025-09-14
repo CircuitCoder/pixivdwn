@@ -75,6 +75,8 @@ pub struct BookmarkedWork {
     title: String,
     tags: Vec<String>,
     x_restrict: XRestrict,
+
+    #[allow(unused)]
     restrict: u8, // TODO: figure out what is this
 
     #[serde(deserialize_with = "de_str_or_u64_to_u64")]
@@ -85,8 +87,11 @@ pub struct BookmarkedWork {
     create_date: chrono::DateTime<chrono::FixedOffset>,
     update_date: chrono::DateTime<chrono::FixedOffset>,
 
+    #[allow(unused)]
     width: u64,
+    #[allow(unused)]
     height: u64,
+
     is_unlisted: bool,
     is_masked: bool,
     ai_type: AIType,
@@ -111,23 +116,35 @@ impl Bookmarks {
             } else {
                 IllustState::Normal
             };
-            let data = IllustData::Fetched {
-                title: work.title,
-                tags: work.tags,
-                user: Illustrator {
-                    id: work.user_id,
-                    name: work.user_name,
-                },
-                create_date: work.create_date,
-                update_date: work.update_date,
-                x_restrict: work.x_restrict,
+
+            let data = if let IllustState::Normal = state {
+                IllustData::Fetched {
+                    title: work.title,
+                    tags: work.tags,
+                    user: Illustrator {
+                        id: work.user_id,
+                        name: work.user_name,
+                    },
+                    create_date: work.create_date,
+                    update_date: work.update_date,
+                    x_restrict: work.x_restrict,
+                    ai_type: work.ai_type,
+                }
+            } else {
+                IllustData::Unknown
             };
+
             let bookmarked_tags = tags_map.remove(&work.bookmark_data.id).unwrap_or_default();
+            if let IllustData::Unknown = data && !bookmarked_tags.is_empty() {
+                tracing::warn!("Bookmarked work {} is unlisted/masked but bookmark tags kept", work.id);
+            }
+
             Illust {
                 id: work.id,
                 data,
                 state,
                 bookmark: IllustBookmarkState {
+                    id: work.bookmark_data.id,
                     tags: bookmarked_tags,
                     private: work.bookmark_data.private,
                 }
@@ -198,6 +215,7 @@ pub enum IllustData {
         create_date: chrono::DateTime<chrono::FixedOffset>,
         update_date: chrono::DateTime<chrono::FixedOffset>,
         x_restrict: XRestrict,
+        ai_type: AIType,
     }
 }
 
@@ -212,6 +230,7 @@ impl IllustData {
 
 pub struct IllustBookmarkState {
     pub tags: Vec<String>,
+    pub id: u64, // The id used for ordering bookmarks
     pub private: bool,
 }
 

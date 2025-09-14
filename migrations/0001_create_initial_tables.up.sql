@@ -1,5 +1,3 @@
--- Your SQL goes here
-
 CREATE TABLE illusts (
     id INTEGER PRIMARY KEY,
     title TEXT NOT NULL,
@@ -9,8 +7,8 @@ CREATE TABLE illusts (
     create_date TEXT NOT NULL,
     update_date TEXT NOT NULL,
 
-    x_restrict INTEGER NOT NULL,
-    ai_type INTEGER NOT NULL,
+    x_restrict INTEGER CHECK (x_restrict in (0, 1, 2)) NOT NULL,
+    ai_type INTEGER CHECK (ai_type in (0, 1, 2)) NOT NULL,
 
     illust_state INTEGER NOT NULL,
     -- TODO: illust data
@@ -18,7 +16,7 @@ CREATE TABLE illusts (
     bookmark_id INTEGER NOT NULL,
     bookmark_private BOOLEAN NOT NULL,
 
-    last_fetch TEXT,
+    last_fetch TEXT NOT NULL,
     last_successful_fetch TEXT
 );
 

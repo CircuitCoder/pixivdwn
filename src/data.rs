@@ -1,5 +1,6 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
+use async_stream::try_stream;
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 
@@ -254,40 +255,35 @@ pub struct Illust {
     pub bookmark: Option<IllustBookmarkState>,
 }
 
-pub async fn get_bookmarks(user: &Session, tag: Option<&str>, hidden: bool) -> anyhow::Result<BTreeMap<u64, Illust>> {
+pub async fn get_bookmarks(user: &Session, tag: Option<&str>, hidden: bool) -> impl futures::Stream<Item = anyhow::Result<Illust>> {
     const LIMIT: usize = 48;
     const DELAY_MS: i64 = 2500;
     const DELAY_RANDOM_VAR_MS: i64 = 500;
 
-    let mut result = BTreeMap::new();
     let mut offset = 0;
 
-    loop {
-        let batch = get_bookmarks_page(user, tag, hidden, offset, LIMIT).await?;
-        let total = batch.total;
-        let batch_size = batch.works.len();
+    try_stream! {
+        loop {
+            let batch = get_bookmarks_page(user, tag, hidden, offset, LIMIT).await?;
+            let total = batch.total;
+            let batch_size = batch.works.len();
 
-        result.extend(batch.into_illusts().map(|illust| (illust.id, illust)));
-        offset += batch_size;
-        if offset < total && batch_size == 0 {
-            tracing::warn!("Empty batch before reaching end of bookmark list.");
-        }
-
-        if offset >= total || batch_size == 0 {
-            if result.len() > total {
-                panic!("Sanity check: somehow fetched more than total");
-            }
-            if result.len() < total {
-                tracing::warn!("Fetched bookmarks is less than total. Bookmarks might be added during fetching.")
+            for illust in batch.into_illusts() {
+                yield illust;
             }
 
-            break;
-        }
+            offset += batch_size;
+            if offset < total && batch_size == 0 {
+                tracing::warn!("Empty batch before reaching end of bookmark list.");
+            }
 
-        let delay = std::time::Duration::from_millis((DELAY_MS + rand::random_range(-DELAY_RANDOM_VAR_MS..=DELAY_RANDOM_VAR_MS)) as u64);
-        tracing::info!("Fetched {}/{} bookmarks, sleeping for {:?}...", offset, total, delay);
-        tokio::time::sleep(delay).await;
+            if offset >= total || batch_size == 0 {
+                break;
+            }
+
+            let delay = std::time::Duration::from_millis((DELAY_MS + rand::random_range(-DELAY_RANDOM_VAR_MS..=DELAY_RANDOM_VAR_MS)) as u64);
+            tracing::info!("Fetched {}/{} bookmarks, sleeping for {:?}...", offset, total, delay);
+            tokio::time::sleep(delay).await;
+        }
     }
-
-    Ok(result)
 }

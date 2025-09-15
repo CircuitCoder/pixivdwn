@@ -34,7 +34,7 @@ pub async fn get_tag_mapping<S: AsRef<str>>(tag: S) -> anyhow::Result<u64> {
 }
 
 
-pub async fn update_illust<'t, 'i: 't>(illust: &'i crate::data::Illust, tag_map_ctx: &'t mut HashMap<&'i str, u64>) -> anyhow::Result<bool> {
+pub async fn update_illust(illust: &crate::data::Illust, tag_map_ctx: &mut HashMap<String, u64>) -> anyhow::Result<bool> {
     // Update illust content (title, caption, etc.)
 
     // Transaction
@@ -44,21 +44,21 @@ pub async fn update_illust<'t, 'i: 't>(illust: &'i crate::data::Illust, tag_map_
     // Before locking the database, upsert all tags
     if let Some(inner) = illust.data.as_fetched() {
         for t in &inner.tags {
-            let e = tag_map_ctx.entry(t.as_str());
-            if let std::collections::hash_map::Entry::Vacant(v) = e {
-                let id = get_tag_mapping(t).await?;
-                v.insert(id);
+            if tag_map_ctx.contains_key(t.as_str()) {
+                continue;
             }
+            let id = get_tag_mapping(t).await?;
+            tag_map_ctx.insert(t.clone(), id);
         }
     }
 
     if let Some(inner) = illust.bookmark.as_ref() {
         for t in &inner.tags {
-            let e = tag_map_ctx.entry(t.as_str());
-            if let std::collections::hash_map::Entry::Vacant(v) = e {
-                let id = get_tag_mapping(t).await?;
-                v.insert(id);
+            if tag_map_ctx.contains_key(t.as_str()) {
+                continue;
             }
+            let id = get_tag_mapping(t).await?;
+            tag_map_ctx.insert(t.clone(), id);
         }
     }
 

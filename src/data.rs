@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use async_stream::try_stream;
-use serde::Deserialize;
+use serde::{de::IgnoredAny, Deserialize};
 use serde_repr::Deserialize_repr;
 
 use crate::config::Session;
@@ -98,11 +98,53 @@ pub struct BookmarkedWork {
     ai_type: AIType,
 }
 
+/// Deserialize bookmarkTags, which is either a map of numbers to list of strings, or an empty ARRAY
+fn de_bookmark_tags<'de, D>(deserializer: D) -> Result<HashMap<u64, Vec<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct BookmarkTagsVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for BookmarkTagsVisitor {
+        type Value = HashMap<u64, Vec<String>>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("map of numbers to list of strings or an empty array")
+        }
+
+        fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+        where
+            M: serde::de::MapAccess<'de>,
+        {
+            let map = HashMap::new();
+            while let Some((key, value)) = access.next_entry::<String, Vec<String>>()? {
+                let key = key.parse::<u64>().map_err(serde::de::Error::custom)?;
+                let mut map = HashMap::new();
+                map.insert(key, value);
+            }
+            Ok(map)
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::SeqAccess<'de>,
+        {
+            if seq.next_element::<IgnoredAny>()?.is_some() {
+                return Err(serde::de::Error::custom("Expected empty array"));
+            }
+            Ok(HashMap::new())
+        }
+    }
+
+    deserializer.deserialize_any(BookmarkTagsVisitor)
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Bookmarks {
     pub total: usize,
     pub works: Vec<BookmarkedWork>,
+    #[serde(deserialize_with = "de_bookmark_tags")]
     pub bookmark_tags: HashMap<u64, Vec<String>>,
 }
 

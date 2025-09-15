@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use clap::Args;
-use futures::{pin_mut, StreamExt};
+use futures::{StreamExt, pin_mut};
 
 #[derive(clap::ValueEnum, Clone, Copy, PartialEq, Eq)]
 enum TerminationCondition {
@@ -33,13 +33,20 @@ pub struct Bookmarks {
 
 impl Bookmarks {
     pub async fn run(self, session: &crate::config::Session) -> anyhow::Result<()> {
-        let bookmarks = crate::data::get_bookmarks(&session, self.tag.as_deref(), self.offset, self.private).await;
+        let bookmarks =
+            crate::data::get_bookmarks(&session, self.tag.as_deref(), self.offset, self.private)
+                .await;
         pin_mut!(bookmarks);
         let mut tag_map_ctx: HashMap<String, u64> = HashMap::new();
         while let Some(illust) = bookmarks.next().await {
             let illust = illust?;
             let updated = crate::db::update_illust(&illust, &mut tag_map_ctx).await?;
-            tracing::info!("Queried {}: {}{}", illust.id, if updated { "[UPDATED] " } else { "" }, illust.data.display_title());
+            tracing::info!(
+                "Queried {}: {}{}",
+                illust.id,
+                if updated { "[UPDATED] " } else { "" },
+                illust.data.display_title()
+            );
             if !updated && self.termination == TerminationCondition::OnHit {
                 tracing::info!("Encountered an already existing illustration. Terminating.");
                 break;

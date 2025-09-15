@@ -14,11 +14,13 @@ impl<I: Iterator<Item = u64> + Clone> Serialize for TagIterator<I> {
 }
 
 async fn get_db() -> anyhow::Result<&'static sqlx::SqlitePool> {
-    let db = DB.get_or_try_init::<anyhow::Error, _, _>(|| async {
-        let key = std::env::var("DATABASE_URL")?;
-        let db = SqlitePool::connect(&key).await?;
-        Ok(db)
-    }).await?;
+    let db = DB
+        .get_or_try_init::<anyhow::Error, _, _>(|| async {
+            let key = std::env::var("DATABASE_URL")?;
+            let db = SqlitePool::connect(&key).await?;
+            Ok(db)
+        })
+        .await?;
 
     Ok(db)
 }
@@ -33,7 +35,10 @@ pub async fn get_tag_mapping<S: AsRef<str>>(tag: S) -> anyhow::Result<u64> {
     Ok(rec.id as u64)
 }
 
-pub async fn update_illust(illust: &crate::data::Illust, tag_map_ctx: &mut HashMap<String, u64>) -> anyhow::Result<bool> {
+pub async fn update_illust(
+    illust: &crate::data::Illust,
+    tag_map_ctx: &mut HashMap<String, u64>,
+) -> anyhow::Result<bool> {
     // Update illust content (title, caption, etc.)
 
     // Transaction
@@ -79,7 +84,6 @@ pub async fn update_illust(illust: &crate::data::Illust, tag_map_ctx: &mut HashM
         .execute(&mut *tx)
         .await?;
     }
-
 
     let illust_id = illust.id as i64;
     // Upsert main illust row:
@@ -142,13 +146,19 @@ pub async fn update_illust(illust: &crate::data::Illust, tag_map_ctx: &mut HashM
     }
 
     if let Some(inner) = illust.data.as_fetched() {
-        let tags_iterator = inner.tags.iter().map(|t| *tag_map_ctx.get(t.as_str()).unwrap());
+        let tags_iterator = inner
+            .tags
+            .iter()
+            .map(|t| *tag_map_ctx.get(t.as_str()).unwrap());
         tag_illust(&mut tx, illust.id, tags_iterator).await?;
     }
 
     // Update bookmark tags
     if let Some(inner) = illust.bookmark.as_ref() {
-        let bookmark_tags_iterator = inner.tags.iter().map(|t| *tag_map_ctx.get(t.as_str()).unwrap());
+        let bookmark_tags_iterator = inner
+            .tags
+            .iter()
+            .map(|t| *tag_map_ctx.get(t.as_str()).unwrap());
         tag_illust_bookmark(&mut tx, illust.id, bookmark_tags_iterator).await?;
     }
 
@@ -157,15 +167,23 @@ pub async fn update_illust(illust: &crate::data::Illust, tag_map_ctx: &mut HashM
     Ok(true)
 }
 
-async fn tag_illust(tx: &mut sqlx::Transaction<'static, sqlx::Sqlite>, illust_id: u64, tags: impl Iterator<Item = u64> + Clone) -> anyhow::Result<()> {
+async fn tag_illust(
+    tx: &mut sqlx::Transaction<'static, sqlx::Sqlite>,
+    illust_id: u64,
+    tags: impl Iterator<Item = u64> + Clone,
+) -> anyhow::Result<()> {
     // Insert new tags
     let illust_id = illust_id as i64;
     let tags_str = serde_json::to_string(&TagIterator(tags.clone()))?;
     for tag in tags {
         let tag = tag as i64;
-        sqlx::query!("INSERT OR IGNORE INTO illust_tags (illust_id, tag_id) VALUES (?, ?)", illust_id, tag)
-            .execute(&mut **tx)
-            .await?;
+        sqlx::query!(
+            "INSERT OR IGNORE INTO illust_tags (illust_id, tag_id) VALUES (?, ?)",
+            illust_id,
+            tag
+        )
+        .execute(&mut **tx)
+        .await?;
     }
     // Delete tags that are not in the new set
     sqlx::query!("DELETE FROM illust_tags WHERE illust_id = ? AND tag_id NOT IN (SELECT json_each.value FROM json_each(?))", illust_id, tags_str)
@@ -174,15 +192,23 @@ async fn tag_illust(tx: &mut sqlx::Transaction<'static, sqlx::Sqlite>, illust_id
     Ok(())
 }
 
-async fn tag_illust_bookmark(tx: &mut sqlx::Transaction<'static, sqlx::Sqlite>, illust_id: u64, tags: impl Iterator<Item = u64> + Clone) -> anyhow::Result<()> {
+async fn tag_illust_bookmark(
+    tx: &mut sqlx::Transaction<'static, sqlx::Sqlite>,
+    illust_id: u64,
+    tags: impl Iterator<Item = u64> + Clone,
+) -> anyhow::Result<()> {
     // Insert new tags
     let illust_id = illust_id as i64;
     let tags_str = serde_json::to_string(&TagIterator(tags.clone()))?;
     for tag in tags {
         let tag = tag as i64;
-        sqlx::query!("INSERT OR IGNORE INTO illust_bookmark_tags (illust_id, tag_id) VALUES (?, ?)", illust_id, tag)
-            .execute(&mut **tx)
-            .await?;
+        sqlx::query!(
+            "INSERT OR IGNORE INTO illust_bookmark_tags (illust_id, tag_id) VALUES (?, ?)",
+            illust_id,
+            tag
+        )
+        .execute(&mut **tx)
+        .await?;
     }
     // Delete tags that are not in the new set
     sqlx::query!("DELETE FROM illust_bookmark_tags WHERE illust_id = ? AND tag_id NOT IN (SELECT json_each.value FROM json_each(?))", illust_id, tags_str)

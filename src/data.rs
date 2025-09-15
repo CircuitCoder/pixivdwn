@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use async_stream::try_stream;
-use serde::{de::IgnoredAny, Deserialize};
+use serde::{Deserialize, de::IgnoredAny};
 use serde_repr::Deserialize_repr;
 
 use crate::config::Session;
@@ -152,7 +152,10 @@ impl Bookmarks {
     pub fn into_illusts(self) -> impl Iterator<Item = Illust> {
         let mut tags_map = self.bookmark_tags;
         self.works.into_iter().map(move |work: BookmarkedWork| {
-            assert!(!work.is_unlisted || !work.is_masked, "Work cannot be both unlisted and masked");
+            assert!(
+                !work.is_unlisted || !work.is_masked,
+                "Work cannot be both unlisted and masked"
+            );
 
             let state = if work.is_unlisted {
                 tracing::warn!("Unlisted work {:?}", work);
@@ -192,7 +195,7 @@ impl Bookmarks {
                     id: work.bookmark_data.id,
                     tags: bookmarked_tags,
                     private: work.bookmark_data.private,
-                })
+                }),
             }
         })
     }
@@ -215,7 +218,13 @@ impl<T> Response<T> {
     }
 }
 
-pub async fn get_bookmarks_page(user: &Session, tag: Option<&str>, hidden: bool, offset: usize, limit: usize) -> anyhow::Result<Bookmarks> {
+pub async fn get_bookmarks_page(
+    user: &Session,
+    tag: Option<&str>,
+    hidden: bool,
+    offset: usize,
+    limit: usize,
+) -> anyhow::Result<Bookmarks> {
     let url = format!(
         "https://www.pixiv.net/ajax/user/{}/illusts/bookmarks",
         user.uid,
@@ -297,7 +306,12 @@ pub struct Illust {
     pub bookmark: Option<IllustBookmarkState>,
 }
 
-pub async fn get_bookmarks(user: &Session, tag: Option<&str>, mut offset: usize, hidden: bool) -> impl futures::Stream<Item = anyhow::Result<Illust>> {
+pub async fn get_bookmarks(
+    user: &Session,
+    tag: Option<&str>,
+    mut offset: usize,
+    hidden: bool,
+) -> impl futures::Stream<Item = anyhow::Result<Illust>> {
     const LIMIT: usize = 48;
     const DELAY_MS: i64 = 2500;
     const DELAY_RANDOM_VAR_MS: i64 = 500;

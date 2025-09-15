@@ -2,7 +2,7 @@ mod data;
 mod config;
 mod db;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use clap::Parser;
 
@@ -29,29 +29,10 @@ async fn main() -> anyhow::Result<()> {
 
     let session = config::Session::new(args.pixiv_cookie, None)?;
     let bookmarks = data::get_bookmarks(&session, args.tag.as_deref(), args.private).await?;
-    let mut tag_map: HashMap<&str, u64> = HashMap::new();
-    for b in bookmarks.values() {
-        use std::collections::hash_map::Entry::*;
-        for t in &b.bookmark.tags {
-            let e = tag_map.entry(t);
-            if let Vacant(v) = e {
-                let id = db::get_tag_mapping(t).await?;
-                v.insert(id);
-            }
-        }
-        if let data::IllustData::Fetched { tags, .. } = &b.data {
-            for t in tags {
-                let e = tag_map.entry(t);
-                if let Vacant(v) = e {
-                    let id = db::get_tag_mapping(t).await?;
-                    v.insert(id);
-                }
-            }
-        }
-    }
-
-    for (_, illust) in bookmarks {
-        println!("{}: {}", illust.id, illust.data.display_title());
+    let mut tag_map_ctx: HashMap<&str, u64> = HashMap::new();
+    for illust in bookmarks.values() {
+        let updated = db::update_illust(illust, &mut tag_map_ctx).await?;
+        println!("{}: {}{}", illust.id, if updated { "[UPDATED] " } else { "" }, illust.data.display_title());
     }
 
     Ok(())

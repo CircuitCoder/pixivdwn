@@ -44,7 +44,7 @@ where
     deserializer.deserialize_any(StrOrU64)
 }
 
-#[derive(Deserialize_repr)]
+#[derive(Deserialize_repr, sqlx::Type, Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum XRestrict {
     Public = 0,
@@ -52,7 +52,7 @@ pub enum XRestrict {
     R18G = 2,
 }
 
-#[derive(Deserialize_repr)]
+#[derive(Deserialize_repr, sqlx::Type, Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum AIType {
     Unspecified = 0,
@@ -60,14 +60,14 @@ pub enum AIType {
     AI = 2,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct BookmarkData {
     #[serde(deserialize_with = "de_str_to_u64")]
     id: u64,
     private: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct BookmarkedWork {
     #[serde(deserialize_with = "de_str_or_u64_to_u64")]
@@ -109,19 +109,23 @@ impl Bookmarks {
     pub fn into_illusts(self) -> impl Iterator<Item = Illust> {
         let mut tags_map = self.bookmark_tags;
         self.works.into_iter().map(move |work: BookmarkedWork| {
+            assert!(!work.is_unlisted || !work.is_masked, "Work cannot be both unlisted and masked");
+
             let state = if work.is_unlisted {
+                tracing::warn!("Unlisted work {:?}", work);
                 IllustState::Unlisted
             } else if work.is_masked {
+                tracing::warn!("Masked work {}", work.id);
                 IllustState::Masked
             } else {
                 IllustState::Normal
             };
 
             let data = if let IllustState::Normal = state {
-                IllustData::Fetched {
+                IllustData::Fetched(FetchedIllustData {
                     title: work.title,
                     tags: work.tags,
-                    user: Illustrator {
+                    author: Illustrator {
                         id: work.user_id,
                         name: work.user_name,
                     },
@@ -129,7 +133,7 @@ impl Bookmarks {
                     update_date: work.update_date,
                     x_restrict: work.x_restrict,
                     ai_type: work.ai_type,
-                }
+                })
             } else {
                 IllustData::Unknown
             };
@@ -141,11 +145,11 @@ impl Bookmarks {
                 id: work.id,
                 data,
                 state,
-                bookmark: IllustBookmarkState {
+                bookmark: Some(IllustBookmarkState {
                     id: work.bookmark_data.id,
                     tags: bookmarked_tags,
                     private: work.bookmark_data.private,
-                }
+                })
             }
         })
     }
@@ -193,35 +197,46 @@ pub async fn get_bookmarks_page(user: &Session, tag: Option<&str>, hidden: bool,
 
 // Parsed data
 
+#[derive(sqlx::Type, Debug, Clone, Copy)]
+#[repr(u8)]
 pub enum IllustState {
-    Normal,
-    Unlisted,
-    Masked,
+    Normal = 0,
+    Unlisted = 1,
+    Masked = 2,
 }
 
 pub struct Illustrator {
-    id: u64,
-    name: String,
+    pub id: u64,
+    pub name: String,
+}
+
+pub struct FetchedIllustData {
+    pub title: String,
+    pub tags: Vec<String>,
+    pub author: Illustrator,
+    pub create_date: chrono::DateTime<chrono::FixedOffset>,
+    pub update_date: chrono::DateTime<chrono::FixedOffset>,
+    pub x_restrict: XRestrict,
+    pub ai_type: AIType,
 }
 
 pub enum IllustData {
     Unknown,
-    Fetched {
-        title: String,
-        tags: Vec<String>,
-        user: Illustrator,
-        create_date: chrono::DateTime<chrono::FixedOffset>,
-        update_date: chrono::DateTime<chrono::FixedOffset>,
-        x_restrict: XRestrict,
-        ai_type: AIType,
-    }
+    Fetched(FetchedIllustData),
 }
 
 impl IllustData {
+    pub fn as_fetched(&self) -> Option<&FetchedIllustData> {
+        match self {
+            IllustData::Unknown => None,
+            IllustData::Fetched(data) => Some(data),
+        }
+    }
+
     pub fn display_title(&self) -> &str {
         match self {
             IllustData::Unknown => "(unknown)",
-            IllustData::Fetched { title, .. } => title,
+            IllustData::Fetched(data) => &data.title,
         }
     }
 }
@@ -236,7 +251,7 @@ pub struct Illust {
     pub id: u64,
     pub data: IllustData,
     pub state: IllustState,
-    pub bookmark: IllustBookmarkState,
+    pub bookmark: Option<IllustBookmarkState>,
 }
 
 pub async fn get_bookmarks(user: &Session, tag: Option<&str>, hidden: bool) -> anyhow::Result<BTreeMap<u64, Illust>> {

@@ -1,7 +1,17 @@
+use std::collections::HashMap;
+
+use serde::Serialize;
 use sqlx::SqlitePool;
 use tokio::sync::OnceCell;
 
 static DB: OnceCell<sqlx::SqlitePool> = OnceCell::const_new();
+
+struct TagIterator<I: Iterator<Item = u64> + Clone>(I);
+impl<I: Iterator<Item = u64> + Clone> Serialize for TagIterator<I> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(self.0.clone())
+    }
+}
 
 async fn get_db() -> anyhow::Result<&'static sqlx::SqlitePool> {
     let db = DB.get_or_try_init::<anyhow::Error, _, _>(|| async {
@@ -21,4 +31,163 @@ pub async fn get_tag_mapping<S: AsRef<str>>(tag: S) -> anyhow::Result<u64> {
         .fetch_one(db)
         .await?;
     Ok(rec.id as u64)
+}
+
+
+pub async fn update_illust<'t, 'i: 't>(illust: &'i crate::data::Illust, tag_map_ctx: &'t mut HashMap<&'i str, u64>) -> anyhow::Result<bool> {
+    // Update illust content (title, caption, etc.)
+
+    // Transaction
+
+    let db = get_db().await?;
+
+    // Before locking the database, upsert all tags
+    if let Some(inner) = illust.data.as_fetched() {
+        for t in &inner.tags {
+            let e = tag_map_ctx.entry(t.as_str());
+            if let std::collections::hash_map::Entry::Vacant(v) = e {
+                let id = get_tag_mapping(t).await?;
+                v.insert(id);
+            }
+        }
+    }
+
+    if let Some(inner) = illust.bookmark.as_ref() {
+        for t in &inner.tags {
+            let e = tag_map_ctx.entry(t.as_str());
+            if let std::collections::hash_map::Entry::Vacant(v) = e {
+                let id = get_tag_mapping(t).await?;
+                v.insert(id);
+            }
+        }
+    }
+
+    let mut tx = db.begin().await?;
+
+    // Update author first s.t. foreign key is satisfied
+    if let Some(inner) = &illust.data.as_fetched() {
+        let author_id = inner.author.id as i64;
+        sqlx::query!(
+            r#"
+            INSERT INTO authors (id, name)
+            VALUES (?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                name=excluded.name
+            "#,
+            author_id,
+            inner.author.name,
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+
+
+    let illust_id = illust.id as i64;
+    // Upsert main illust row:
+    // Insert if not exists
+    // If exists and previously masked, insert anyway
+    // If exists and previously unlisted, only update if new state is not masked
+    // If exists and previously normal, only update if the update_date is newer
+
+    // We write this in a single upsert
+    let fetched_data = illust.data.as_fetched();
+    let fetched_title = fetched_data.map(|d| d.title.as_str());
+    let fetched_author_id = fetched_data.map(|d| d.author.id as i64);
+    let fetched_create_date = fetched_data.map(|d| d.create_date);
+    let fetched_update_date = fetched_data.map(|d| d.update_date);
+    let fetched_x_restrict = fetched_data.map(|d| d.x_restrict);
+    let fetched_ai_type = fetched_data.map(|d| d.ai_type);
+    let illust_bookmark_id = illust.bookmark.as_ref().map(|b| b.id as i64);
+    let illust_bookmark_private = illust.bookmark.as_ref().map(|b| b.private);
+    let affected_rows = sqlx::query!(
+        r#"
+        INSERT INTO illusts (id, title, author_id, create_date, update_date, x_restrict, ai_type, illust_state, bookmark_id, bookmark_private, last_fetch)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'utc'))
+        ON CONFLICT(id) DO UPDATE SET
+            title=excluded.title,
+            author_id=excluded.author_id,
+            create_date=excluded.create_date,
+            update_date=excluded.update_date,
+            x_restrict=excluded.x_restrict,
+            ai_type=excluded.ai_type,
+            illust_state=excluded.illust_state,
+            bookmark_id=excluded.bookmark_id,
+            bookmark_private=excluded.bookmark_private,
+            last_fetch=excluded.last_fetch
+        WHERE
+            (illust_state = 2) -- Masked
+            OR (illust_state = 1 AND excluded.illust_state != 2) -- Unlisted -> Not Masked
+            OR (
+                illust_state = 0
+                AND excluded.illust_state = 0
+                AND datetime(excluded.update_date, 'utc') > datetime(update_date, 'utc')
+            ) -- Normal -> New
+        "#,
+        illust_id,
+        fetched_title,
+        fetched_author_id,
+        fetched_create_date,
+        fetched_update_date,
+        fetched_x_restrict,
+        fetched_ai_type,
+        illust.state,
+        illust_bookmark_id,
+        illust_bookmark_private,
+    )
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+
+    if affected_rows == 0 {
+        return Ok(false);
+    }
+
+    if let Some(inner) = illust.data.as_fetched() {
+        let tags_iterator = inner.tags.iter().map(|t| *tag_map_ctx.get(t.as_str()).unwrap());
+        tag_illust(&mut tx, illust.id, tags_iterator).await?;
+    }
+
+    // Update bookmark tags
+    if let Some(inner) = illust.bookmark.as_ref() {
+        let bookmark_tags_iterator = inner.tags.iter().map(|t| *tag_map_ctx.get(t.as_str()).unwrap());
+        tag_illust_bookmark(&mut tx, illust.id, bookmark_tags_iterator).await?;
+    }
+
+    tx.commit().await?;
+
+    Ok(true)
+}
+
+async fn tag_illust(tx: &mut sqlx::Transaction<'static, sqlx::Sqlite>, illust_id: u64, tags: impl Iterator<Item = u64> + Clone) -> anyhow::Result<()> {
+    // Insert new tags
+    let illust_id = illust_id as i64;
+    let tags_str = serde_json::to_string(&TagIterator(tags.clone()))?;
+    for tag in tags {
+        let tag = tag as i64;
+        sqlx::query!("INSERT OR IGNORE INTO illust_tags (illust_id, tag_id) VALUES (?, ?)", illust_id, tag)
+            .execute(&mut **tx)
+            .await?;
+    }
+    // Delete tags that are not in the new set
+    sqlx::query!("DELETE FROM illust_tags WHERE illust_id = ? AND tag_id NOT IN (SELECT json_each.value FROM json_each(?))", illust_id, tags_str)
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
+}
+
+async fn tag_illust_bookmark(tx: &mut sqlx::Transaction<'static, sqlx::Sqlite>, illust_id: u64, tags: impl Iterator<Item = u64> + Clone) -> anyhow::Result<()> {
+    // Insert new tags
+    let illust_id = illust_id as i64;
+    let tags_str = serde_json::to_string(&TagIterator(tags.clone()))?;
+    for tag in tags {
+        let tag = tag as i64;
+        sqlx::query!("INSERT OR IGNORE INTO illust_bookmark_tags (illust_id, tag_id) VALUES (?, ?)", illust_id, tag)
+            .execute(&mut **tx)
+            .await?;
+    }
+    // Delete tags that are not in the new set
+    sqlx::query!("DELETE FROM illust_bookmark_tags WHERE illust_id = ? AND tag_id NOT IN (SELECT json_each.value FROM json_each(?))", illust_id, tags_str)
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
 }

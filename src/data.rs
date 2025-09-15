@@ -297,12 +297,10 @@ pub struct Illust {
     pub bookmark: Option<IllustBookmarkState>,
 }
 
-pub async fn get_bookmarks(user: &Session, tag: Option<&str>, hidden: bool) -> impl futures::Stream<Item = anyhow::Result<Illust>> {
+pub async fn get_bookmarks(user: &Session, tag: Option<&str>, mut offset: usize, hidden: bool) -> impl futures::Stream<Item = anyhow::Result<Illust>> {
     const LIMIT: usize = 48;
     const DELAY_MS: i64 = 2500;
     const DELAY_RANDOM_VAR_MS: i64 = 500;
-
-    let mut offset = 0;
 
     try_stream! {
         loop {

@@ -17,6 +17,10 @@ struct Args {
     /// Bookmark tag
     tag: Option<String>,
 
+    #[arg(long, default_value = "0")]
+    /// Initial offset
+    offset: usize,
+
     #[arg(short, long)]
     /// Fetch private bookmarks
     private: bool,
@@ -42,7 +46,7 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     let session = config::Session::new(args.pixiv_cookie, None)?;
-    let bookmarks = data::get_bookmarks(&session, args.tag.as_deref(), args.private).await;
+    let bookmarks = data::get_bookmarks(&session, args.tag.as_deref(), args.offset, args.private).await;
     pin_mut!(bookmarks);
     let mut tag_map_ctx: HashMap<String, u64> = HashMap::new();
     while let Some(illust) = bookmarks.next().await {

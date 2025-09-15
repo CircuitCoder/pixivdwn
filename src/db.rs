@@ -33,7 +33,6 @@ pub async fn get_tag_mapping<S: AsRef<str>>(tag: S) -> anyhow::Result<u64> {
     Ok(rec.id as u64)
 }
 
-
 pub async fn update_illust(illust: &crate::data::Illust, tag_map_ctx: &mut HashMap<String, u64>) -> anyhow::Result<bool> {
     // Update illust content (title, caption, etc.)
 

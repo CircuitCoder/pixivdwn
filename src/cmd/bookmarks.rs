@@ -22,6 +22,10 @@ pub struct Bookmarks {
     /// Initial offset
     offset: usize,
 
+    #[arg(long)]
+    /// Maximum number of fetched illustrations
+    max_cnt: Option<usize>,
+
     #[arg(short, long)]
     /// Fetch private bookmarks
     private: bool,
@@ -38,6 +42,7 @@ impl Bookmarks {
                 .await;
         pin_mut!(bookmarks);
         let mut tag_map_ctx: HashMap<String, u64> = HashMap::new();
+        let mut cnt = 0;
         while let Some(illust) = bookmarks.next().await {
             let illust = illust?;
             let updated = crate::db::update_illust(&illust, &mut tag_map_ctx).await?;
@@ -47,8 +52,20 @@ impl Bookmarks {
                 if updated { "[UPDATED] " } else { "" },
                 illust.data.display_title()
             );
+
             if !updated && self.termination == TerminationCondition::OnHit {
                 tracing::info!("Encountered an already existing illustration. Terminating.");
+                break;
+            }
+
+            cnt += 1;
+            if let Some(max_count) = self.max_cnt
+                && cnt >= max_count
+            {
+                tracing::info!(
+                    "Reached the maximum number of fetched illustrations ({}). Terminating.",
+                    max_count
+                );
                 break;
             }
         }

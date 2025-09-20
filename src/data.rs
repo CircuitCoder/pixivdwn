@@ -47,6 +47,14 @@ where
 
 #[derive(Deserialize_repr, sqlx::Type, Debug, Clone, Copy)]
 #[repr(u8)]
+pub enum IllustType {
+    Illustration = 0,
+    Manga = 1,
+    Ugoira = 2,
+}
+
+#[derive(Deserialize_repr, sqlx::Type, Debug, Clone, Copy)]
+#[repr(u8)]
 pub enum XRestrict {
     Public = 0,
     R18 = 1,
@@ -76,6 +84,9 @@ pub struct BookmarkedWork {
     title: String,
     tags: Vec<String>,
     x_restrict: XRestrict,
+
+    illust_type: IllustType,
+    page_count: u64,
 
     #[allow(unused)]
     restrict: u8, // TODO: figure out what is this
@@ -179,6 +190,9 @@ impl Bookmarks {
                     update_date: work.update_date,
                     x_restrict: work.x_restrict,
                     ai_type: work.ai_type,
+
+                    illust_type: work.illust_type,
+                    page_count: work.page_count,
                 })
             } else {
                 IllustData::Unknown
@@ -270,6 +284,9 @@ pub struct FetchedIllustData {
     pub update_date: chrono::DateTime<chrono::FixedOffset>,
     pub x_restrict: XRestrict,
     pub ai_type: AIType,
+
+    pub illust_type: IllustType,
+    pub page_count: u64,
 }
 
 pub enum IllustData {

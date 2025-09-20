@@ -45,16 +45,22 @@ impl Bookmarks {
         let mut cnt = 0;
         while let Some(illust) = bookmarks.next().await {
             let illust = illust?;
-            let updated = crate::db::update_illust(&illust, &mut tag_map_ctx).await?;
+            let update_result = crate::db::update_illust(&illust, &mut tag_map_ctx).await?;
+            let update_prompt = match update_result {
+                crate::db::IllustUpdateResult::Inserted => "INSERTED",
+                crate::db::IllustUpdateResult::BookmarkIDChanged => "BMIDCHANGED",
+                crate::db::IllustUpdateResult::Updated => "UPDATED",
+                crate::db::IllustUpdateResult::Skipped => "SKIPPED",
+            };
             tracing::info!(
-                "Queried {}: {}{}",
+                "Queried {}: [{}] {}",
                 illust.id,
-                if updated { "[UPDATED] " } else { "" },
+                update_prompt,
                 illust.data.display_title()
             );
 
-            if !updated && self.termination == TerminationCondition::OnHit {
-                tracing::info!("Encountered an already existing illustration. Terminating.");
+            if update_result == crate::db::IllustUpdateResult::Updated && self.termination == TerminationCondition::OnHit {
+                tracing::info!("Encountered an already existing illustration, whose bookmark ID is unchanged. Terminating.");
                 break;
             }
 

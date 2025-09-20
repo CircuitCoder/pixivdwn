@@ -3,7 +3,10 @@ CREATE TABLE illusts (
     title TEXT,
     author_id INTEGER,
 
-    illust_state INTEGER NOT NULL,
+    illust_state INTEGER CHECK (illust_state in (0, 1, 2)) NOT NULL,
+
+    illust_type INTEGER CHECK (illust_type in (0, 1, 2)),
+    page_count INTEGER,
 
     -- YYYY-MM-DDTHH:MM:SS.SSS+TZ
     create_date TEXT,
@@ -17,7 +20,6 @@ CREATE TABLE illusts (
 
     last_fetch TEXT NOT NULL,
     last_successful_fetch TEXT,
-    last_full_fetch TEXT,
 
     FOREIGN KEY (author_id) REFERENCES authors(id)
 );

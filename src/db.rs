@@ -4,6 +4,8 @@ use serde::Serialize;
 use sqlx::SqlitePool;
 use tokio::sync::OnceCell;
 
+use crate::data::IllustState;
+
 static DB: OnceCell<sqlx::SqlitePool> = OnceCell::const_new();
 
 struct TagIterator<I: Iterator<Item = u64> + Clone>(I);
@@ -35,10 +37,18 @@ pub async fn get_tag_mapping<S: AsRef<str>>(tag: S) -> anyhow::Result<u64> {
     Ok(rec.id as u64)
 }
 
+#[derive(PartialEq, Eq)]
+pub enum IllustUpdateResult {
+    Inserted,
+    BookmarkIDChanged,
+    Updated,
+    Skipped,
+}
+
 pub async fn update_illust(
     illust: &crate::data::Illust,
     tag_map_ctx: &mut HashMap<String, u64>,
-) -> anyhow::Result<bool> {
+) -> anyhow::Result<IllustUpdateResult> {
     // Update illust content (title, caption, etc.)
 
     // Transaction
@@ -90,9 +100,16 @@ pub async fn update_illust(
     // Insert if not exists
     // If exists and previously masked, insert anyway
     // If exists and previously unlisted, only update if new state is not masked
-    // If exists and previously normal, only update if the update_date is newer
+    // If exists and previously normal, only update if the new state is normal
+    // Returns whether the illust was "new", in the sense that it was inserted or the bookmark id changed
 
-    // We write this in a single upsert
+    let orig = sqlx::query!(
+        r#"SELECT bookmark_id, illust_state as "illust_state: IllustState" FROM illusts WHERE id = ?"#,
+        illust_id
+    )
+        .fetch_optional(&mut *tx)
+        .await?;
+
     let fetched_data = illust.data.as_fetched();
     let fetched_title = fetched_data.map(|d| d.title.as_str());
     let fetched_author_id = fetched_data.map(|d| d.author.id as i64);
@@ -102,48 +119,108 @@ pub async fn update_illust(
     let fetched_ai_type = fetched_data.map(|d| d.ai_type);
     let illust_bookmark_id = illust.bookmark.as_ref().map(|b| b.id as i64);
     let illust_bookmark_private = illust.bookmark.as_ref().map(|b| b.private);
-    let affected_rows = sqlx::query!(
-        r#"
-        INSERT INTO illusts (id, title, author_id, create_date, update_date, x_restrict, ai_type, illust_state, bookmark_id, bookmark_private, last_fetch)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'utc'))
-        ON CONFLICT(id) DO UPDATE SET
-            title=excluded.title,
-            author_id=excluded.author_id,
-            create_date=excluded.create_date,
-            update_date=excluded.update_date,
-            x_restrict=excluded.x_restrict,
-            ai_type=excluded.ai_type,
-            illust_state=excluded.illust_state,
-            bookmark_id=excluded.bookmark_id,
-            bookmark_private=excluded.bookmark_private,
-            last_fetch=excluded.last_fetch
-        WHERE
-            (illust_state = 2) -- Masked
-            OR (illust_state = 1 AND excluded.illust_state != 2) -- Unlisted -> Not Masked
-            OR (
-                illust_state = 0
-                AND excluded.illust_state = 0
-                AND datetime(excluded.update_date, 'utc') > datetime(update_date, 'utc')
-            ) -- Normal -> New
-        "#,
-        illust_id,
-        fetched_title,
-        fetched_author_id,
-        fetched_create_date,
-        fetched_update_date,
-        fetched_x_restrict,
-        fetched_ai_type,
-        illust.state,
-        illust_bookmark_id,
-        illust_bookmark_private,
-    )
-        .execute(&mut *tx)
-        .await?
-        .rows_affected();
+    let fetched_illust_type = fetched_data.map(|d| d.illust_type);
+    let fetched_page_count = fetched_data.map(|d| d.page_count as i64);
 
-    if affected_rows == 0 {
-        return Ok(false);
-    }
+    let update_type = if let Some(orig) = &orig {
+        // Set last_fetch no matter what
+        sqlx::query!("UPDATE illusts SET last_fetch = datetime('now', 'utc') WHERE id = ?", illust_id)
+            .execute(&mut *tx)
+            .await?;
+
+        let skip = match (orig.illust_state, illust.state) {
+            (IllustState::Masked, _) => false,
+            (IllustState::Unlisted, IllustState::Masked) => true,
+            (IllustState::Unlisted, _) => false,
+            (IllustState::Normal, IllustState::Masked) => true,
+            (IllustState::Normal, IllustState::Unlisted) => true,
+            (IllustState::Normal, IllustState::Normal) => false,
+        };
+        if skip {
+            return Ok(IllustUpdateResult::Skipped);
+        }
+
+        // Do update
+        sqlx::query!(
+            r#"UPDATE illusts SET
+                title=?,
+                author_id=?,
+                create_date=?,
+                update_date=?,
+                x_restrict=?,
+                ai_type=?,
+                illust_state=?,
+                bookmark_id=?,
+                bookmark_private=?,
+                illust_type=?,
+                page_count=?
+            WHERE id = ?"#,
+            fetched_title,
+            fetched_author_id,
+            fetched_create_date,
+            fetched_update_date,
+            fetched_x_restrict,
+            fetched_ai_type,
+            illust.state,
+            illust_bookmark_id,
+            illust_bookmark_private,
+            fetched_illust_type,
+            fetched_page_count,
+            illust_id,
+        )
+            .execute(&mut *tx)
+            .await?;
+
+        // If this is normal, also update last_successful_fetch, copy from last_fetch
+        if let IllustState::Normal = illust.state {
+            sqlx::query!("UPDATE illusts SET last_successful_fetch = last_fetch WHERE id = ?", illust_id)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        if orig.bookmark_id != illust_bookmark_id {
+            IllustUpdateResult::BookmarkIDChanged
+        } else {
+            IllustUpdateResult::Updated
+        }
+    } else {
+        // No previous line, insert
+        sqlx::query!(
+            r#"INSERT INTO illusts (
+                id,
+                title,
+                author_id,
+                create_date,
+                update_date,
+                x_restrict,
+                ai_type,
+                illust_state,
+                bookmark_id,
+                bookmark_private,
+                illust_type,
+                page_count,
+                last_fetch,
+                last_successful_fetch
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'utc'), CASE WHEN ? = 0 THEN datetime('now', 'utc') ELSE NULL END
+            )"#,
+            illust_id,
+            fetched_title,
+            fetched_author_id,
+            fetched_create_date,
+            fetched_update_date,
+            fetched_x_restrict,
+            fetched_ai_type,
+            illust.state,
+            illust_bookmark_id,
+            illust_bookmark_private,
+            fetched_illust_type,
+            fetched_page_count,
+            illust.state,
+        ).execute(&mut *tx)
+            .await?;
+        IllustUpdateResult::Inserted
+    };
 
     if let Some(inner) = illust.data.as_fetched() {
         let tags_iterator = inner
@@ -164,7 +241,7 @@ pub async fn update_illust(
 
     tx.commit().await?;
 
-    Ok(true)
+    Ok(update_type)
 }
 
 async fn tag_illust(

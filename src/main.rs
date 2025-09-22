@@ -2,6 +2,7 @@ mod cmd;
 mod config;
 mod data;
 mod db;
+mod image;
 
 use clap::Parser;
 #[derive(Parser)]

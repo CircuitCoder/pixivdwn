@@ -4,7 +4,7 @@ use serde::Serialize;
 use sqlx::SqlitePool;
 use tokio::sync::OnceCell;
 
-use crate::data::IllustState;
+use crate::data::{IllustBookmarkTags, IllustState};
 
 static DB: OnceCell<sqlx::SqlitePool> = OnceCell::const_new();
 
@@ -37,6 +37,7 @@ pub async fn get_tag_mapping<S: AsRef<str>>(tag: S) -> anyhow::Result<u64> {
     Ok(rec.id as u64)
 }
 
+// TODO: detech completely unchanged
 #[derive(PartialEq, Eq)]
 pub enum IllustUpdateResult {
     Inserted,
@@ -56,18 +57,20 @@ pub async fn update_illust(
     let db = get_db().await?;
 
     // Before locking the database, upsert all tags
-    if let Some(inner) = illust.data.as_fetched() {
-        for t in &inner.tags {
-            if tag_map_ctx.contains_key(t.as_str()) {
+    if let Some(inner) = illust.data.as_simple() {
+        for t in inner.tags.tag_names() {
+            if tag_map_ctx.contains_key(t) {
                 continue;
             }
             let id = get_tag_mapping(t).await?;
-            tag_map_ctx.insert(t.clone(), id);
+            tag_map_ctx.insert(t.to_owned(), id);
         }
     }
 
-    if let Some(inner) = illust.bookmark.as_ref() {
-        for t in &inner.tags {
+    if let Some(inner) = illust.bookmark.as_ref()
+        && let IllustBookmarkTags::Known(tags) = &inner.tags
+    {
+        for t in tags.iter() {
             if tag_map_ctx.contains_key(t.as_str()) {
                 continue;
             }
@@ -79,7 +82,7 @@ pub async fn update_illust(
     let mut tx = db.begin().await?;
 
     // Update author first s.t. foreign key is satisfied
-    if let Some(inner) = &illust.data.as_fetched() {
+    if let Some(inner) = &illust.data.as_simple() {
         let author_id = inner.author.id as i64;
         sqlx::query!(
             r#"
@@ -110,7 +113,7 @@ pub async fn update_illust(
         .fetch_optional(&mut *tx)
         .await?;
 
-    let fetched_data = illust.data.as_fetched();
+    let fetched_data = illust.data.as_simple();
     let fetched_title = fetched_data.map(|d| d.title.as_str());
     let fetched_author_id = fetched_data.map(|d| d.author.id as i64);
     let fetched_create_date = fetched_data.map(|d| d.create_date);
@@ -124,9 +127,12 @@ pub async fn update_illust(
 
     let update_type = if let Some(orig) = &orig {
         // Set last_fetch no matter what
-        sqlx::query!("UPDATE illusts SET last_fetch = datetime('now', 'utc') WHERE id = ?", illust_id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query!(
+            "UPDATE illusts SET last_fetch = datetime('now', 'utc') WHERE id = ?",
+            illust_id
+        )
+        .execute(&mut *tx)
+        .await?;
 
         let skip = match (orig.illust_state, illust.state) {
             (IllustState::Masked, _) => false,
@@ -168,15 +174,8 @@ pub async fn update_illust(
             fetched_page_count,
             illust_id,
         )
-            .execute(&mut *tx)
-            .await?;
-
-        // If this is normal, also update last_successful_fetch, copy from last_fetch
-        if let IllustState::Normal = illust.state {
-            sqlx::query!("UPDATE illusts SET last_successful_fetch = last_fetch WHERE id = ?", illust_id)
-                .execute(&mut *tx)
-                .await?;
-        }
+        .execute(&mut *tx)
+        .await?;
 
         if orig.bookmark_id != illust_bookmark_id {
             IllustUpdateResult::BookmarkIDChanged
@@ -199,10 +198,9 @@ pub async fn update_illust(
                 bookmark_private,
                 illust_type,
                 page_count,
-                last_fetch,
-                last_successful_fetch
+                last_fetch
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'utc'), CASE WHEN ? = 0 THEN datetime('now', 'utc') ELSE NULL END
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'utc')
             )"#,
             illust_id,
             fetched_title,
@@ -216,26 +214,53 @@ pub async fn update_illust(
             illust_bookmark_private,
             fetched_illust_type,
             fetched_page_count,
-            illust.state,
         ).execute(&mut *tx)
             .await?;
         IllustUpdateResult::Inserted
     };
 
-    if let Some(inner) = illust.data.as_fetched() {
-        let tags_iterator = inner
-            .tags
-            .iter()
-            .map(|t| *tag_map_ctx.get(t.as_str()).unwrap());
+    // If this is normal, also update last_successful_fetch, copy from last_fetch
+    if let IllustState::Normal = illust.state {
+        sqlx::query!(
+            "UPDATE illusts SET last_successful_fetch = last_fetch WHERE id = ?",
+            illust_id
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    if let Some(detail) = illust.data.as_detail() {
+        // Update details
+        let row_changed = sqlx::query!(
+            r#"UPDATE illusts SET
+                content_desc=?,
+                content_is_howto=?,
+                content_is_original=?,
+                last_successful_content_fetch = last_fetch
+            WHERE id = ?"#,
+            detail.desc,
+            detail.is_howto,
+            detail.is_original,
+            illust_id,
+        )
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+        assert_eq!(row_changed, 1);
+    }
+
+    // TODO: add tag details
+    if let Some(inner) = illust.data.as_simple() {
+        let tags: Vec<_> = inner.tags.tag_names().map(str::to_owned).collect();
+        let tags_iterator = tags.iter().map(|t| *tag_map_ctx.get(t).unwrap());
         tag_illust(&mut tx, illust.id, tags_iterator).await?;
     }
 
     // Update bookmark tags
-    if let Some(inner) = illust.bookmark.as_ref() {
-        let bookmark_tags_iterator = inner
-            .tags
-            .iter()
-            .map(|t| *tag_map_ctx.get(t.as_str()).unwrap());
+    if let Some(inner) = illust.bookmark.as_ref()
+        && let IllustBookmarkTags::Known(tags) = &inner.tags
+    {
+        let bookmark_tags_iterator = tags.iter().map(|t| *tag_map_ctx.get(t.as_str()).unwrap());
         tag_illust_bookmark(&mut tx, illust.id, bookmark_tags_iterator).await?;
     }
 

@@ -78,11 +78,48 @@ pub struct BookmarkData {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct BookmarkedWork {
+pub struct DetailedTag {
+    pub tag: String,
+    pub locked: bool,
+    pub deletable: bool,
+    #[serde(deserialize_with = "de_str_to_u64")]
+    pub user_id: u64,
+    pub user_name: String,
+    pub romaji: Option<String>,
+    pub translation: Option<HashMap<String, String>>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+pub enum Tags {
+    Brief(Vec<String>),
+    #[serde(rename_all = "camelCase")]
+    Detailed {
+        #[serde(deserialize_with = "de_str_to_u64")]
+        author_id: u64,
+        is_locked: bool,
+        writable: bool,
+        tags: Vec<DetailedTag>,
+    },
+}
+
+impl Tags {
+    pub fn tag_names(&self) -> impl Iterator<Item = &str> {
+        let ret: Box<dyn Iterator<Item = _>> = match self {
+            Tags::Brief(tags) => Box::new(tags.iter().map(|s| s.as_str())),
+            Tags::Detailed { tags, .. } => Box::new(tags.iter().map(|t| t.tag.as_str())),
+        };
+        ret
+    }
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FetchWorkBrief {
     #[serde(deserialize_with = "de_str_or_u64_to_u64")]
     id: u64,
     title: String,
-    tags: Vec<String>,
+    tags: Tags,
     x_restrict: XRestrict,
 
     illust_type: IllustType,
@@ -97,6 +134,7 @@ pub struct BookmarkedWork {
 
     bookmark_data: BookmarkData,
     create_date: chrono::DateTime<chrono::FixedOffset>,
+    #[serde(alias = "uploadDate")] // Detail field
     update_date: chrono::DateTime<chrono::FixedOffset>,
 
     #[allow(unused)]
@@ -104,9 +142,130 @@ pub struct BookmarkedWork {
     #[allow(unused)]
     height: u64,
 
+    #[serde(default)] // For single illust API
     is_unlisted: bool,
+    #[serde(default)] // For single illust API
     is_masked: bool,
     ai_type: AIType,
+}
+
+impl Into<Illust> for FetchWorkBrief {
+    fn into(self) -> Illust {
+        assert!(
+            !self.is_unlisted || !self.is_masked,
+            "self cannot be both unlisted and masked"
+        );
+
+        let state = if self.is_unlisted {
+            tracing::warn!("Unlisted self {:?}", self);
+            IllustState::Unlisted
+        } else if self.is_masked {
+            tracing::warn!("Masked self {}", self.id);
+            IllustState::Masked
+        } else {
+            IllustState::Normal
+        };
+
+        let data = if let IllustState::Normal = state {
+            IllustData::Simple(IllustDataSimple {
+                title: self.title,
+                tags: self.tags,
+                author: Illustrator {
+                    id: self.user_id,
+                    name: self.user_name,
+                },
+                create_date: self.create_date,
+                update_date: self.update_date,
+                x_restrict: self.x_restrict,
+                ai_type: self.ai_type,
+
+                illust_type: self.illust_type,
+                page_count: self.page_count,
+            })
+        } else {
+            IllustData::Unknown
+        };
+
+        Illust {
+            id: self.id,
+            data,
+            state,
+            bookmark: Some(IllustBookmarkState {
+                id: self.bookmark_data.id,
+                tags: IllustBookmarkTags::Unknown,
+                private: self.bookmark_data.private,
+            }),
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct PageUrls {
+    #[serde(alias = "thumb_mini")]
+    pub mini: String,
+    pub thumb: Option<String>,
+    pub small: String,
+    pub regular: String,
+    pub original: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Page {
+    pub urls: PageUrls,
+    pub width: u64,
+    pub height: u64,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FetchWorkDetail {
+    #[serde(deserialize_with = "de_str_to_u64")]
+    pub illust_id: u64,
+    pub illust_title: String,
+    pub illust_comment: String,
+    pub description: String,
+
+    #[serde(flatten)]
+    pub brief: FetchWorkBrief,
+
+    #[allow(unused)]
+    pub bookmark_count: u64,
+    #[allow(unused)]
+    pub like_count: u64,
+    #[allow(unused)]
+    pub comment_count: u64,
+    #[allow(unused)]
+    pub response_count: u64,
+    #[allow(unused)]
+    pub view_count: u64,
+
+    pub urls: PageUrls,
+
+    pub is_howto: bool,
+    pub is_original: bool,
+}
+
+impl Into<Illust> for FetchWorkDetail {
+    fn into(self) -> Illust {
+        let mut illust: Illust = self.brief.into();
+        match illust.data {
+            IllustData::Unknown => {}
+            IllustData::Simple(brief) => {
+                assert_eq!(self.illust_comment, self.description);
+                assert_eq!(self.illust_id, illust.id);
+                assert_eq!(self.illust_title, brief.title);
+
+                let extra = IllustDataDetail {
+                    desc: self.description,
+                    is_howto: self.is_howto,
+                    is_original: self.is_original,
+                };
+                illust.data = IllustData::Detailed(brief, extra);
+            }
+            IllustData::Detailed(_, _) => unreachable!(),
+        }
+        illust
+    }
 }
 
 /// Deserialize bookmarkTags, which is either a map of numbers to list of strings, or an empty ARRAY
@@ -153,7 +312,7 @@ where
 #[serde(rename_all = "camelCase")]
 pub struct Bookmarks {
     pub total: usize,
-    pub works: Vec<BookmarkedWork>,
+    pub works: Vec<FetchWorkBrief>,
     #[serde(deserialize_with = "de_bookmark_tags")]
     pub bookmark_tags: HashMap<u64, Vec<String>>,
 }
@@ -161,55 +320,14 @@ pub struct Bookmarks {
 impl Bookmarks {
     pub fn into_illusts(self) -> impl Iterator<Item = Illust> {
         let mut tags_map = self.bookmark_tags;
-        self.works.into_iter().map(move |work: BookmarkedWork| {
-            assert!(
-                !work.is_unlisted || !work.is_masked,
-                "Work cannot be both unlisted and masked"
-            );
-
-            let state = if work.is_unlisted {
-                tracing::warn!("Unlisted work {:?}", work);
-                IllustState::Unlisted
-            } else if work.is_masked {
-                tracing::warn!("Masked work {}", work.id);
-                IllustState::Masked
-            } else {
-                IllustState::Normal
-            };
-
-            let data = if let IllustState::Normal = state {
-                IllustData::Fetched(FetchedIllustData {
-                    title: work.title,
-                    tags: work.tags,
-                    author: Illustrator {
-                        id: work.user_id,
-                        name: work.user_name,
-                    },
-                    create_date: work.create_date,
-                    update_date: work.update_date,
-                    x_restrict: work.x_restrict,
-                    ai_type: work.ai_type,
-
-                    illust_type: work.illust_type,
-                    page_count: work.page_count,
-                })
-            } else {
-                IllustData::Unknown
-            };
-
+        self.works.into_iter().map(move |work: FetchWorkBrief| {
             // Bookmark tags will be kept for unlisted/masked works
-            let bookmarked_tags = tags_map.remove(&work.bookmark_data.id).unwrap_or_default();
-
-            Illust {
-                id: work.id,
-                data,
-                state,
-                bookmark: Some(IllustBookmarkState {
-                    id: work.bookmark_data.id,
-                    tags: bookmarked_tags,
-                    private: work.bookmark_data.private,
-                }),
+            let mut illust: Illust = work.into();
+            if let Some(ref mut bookmark) = illust.bookmark {
+                let bookmarked_tags = tags_map.remove(&bookmark.id).unwrap_or_default();
+                bookmark.tags = IllustBookmarkTags::Known(bookmarked_tags);
             }
+            illust
         })
     }
 }
@@ -231,7 +349,7 @@ impl<T> Response<T> {
     }
 }
 
-pub async fn get_bookmarks_page(
+async fn get_bookmarks_page(
     user: &Session,
     tag: Option<&str>,
     hidden: bool,
@@ -270,14 +388,16 @@ pub enum IllustState {
     Masked = 2,
 }
 
+#[derive(Debug)]
 pub struct Illustrator {
     pub id: u64,
     pub name: String,
 }
 
-pub struct FetchedIllustData {
+#[derive(Debug)]
+pub struct IllustDataSimple {
     pub title: String,
-    pub tags: Vec<String>,
+    pub tags: Tags,
     pub author: Illustrator,
     pub create_date: chrono::DateTime<chrono::FixedOffset>,
     pub update_date: chrono::DateTime<chrono::FixedOffset>,
@@ -288,33 +408,57 @@ pub struct FetchedIllustData {
     pub page_count: u64,
 }
 
+#[derive(Debug)]
+pub struct IllustDataDetail {
+    pub desc: String,
+    pub is_howto: bool,
+    pub is_original: bool,
+}
+
+#[derive(Debug)]
 pub enum IllustData {
     Unknown,
-    Fetched(FetchedIllustData),
+    Simple(IllustDataSimple),
+    Detailed(IllustDataSimple, IllustDataDetail),
 }
 
 impl IllustData {
-    pub fn as_fetched(&self) -> Option<&FetchedIllustData> {
+    pub fn as_simple(&self) -> Option<&IllustDataSimple> {
         match self {
             IllustData::Unknown => None,
-            IllustData::Fetched(data) => Some(data),
+            IllustData::Simple(data) => Some(data),
+            IllustData::Detailed(data, _) => Some(data),
+        }
+    }
+
+    pub fn as_detail(&self) -> Option<&IllustDataDetail> {
+        match self {
+            IllustData::Detailed(_, detail) => Some(detail),
+            _ => None,
         }
     }
 
     pub fn display_title(&self) -> &str {
-        match self {
-            IllustData::Unknown => "(unknown)",
-            IllustData::Fetched(data) => &data.title,
-        }
+        self.as_simple()
+            .map(|d| d.title.as_str())
+            .unwrap_or("(unknown)")
     }
 }
 
-pub struct IllustBookmarkState {
-    pub tags: Vec<String>,
-    pub id: u64, // The id used for ordering bookmarks
-    pub private: bool,
+#[derive(Debug)]
+pub enum IllustBookmarkTags {
+    Known(Vec<String>),
+    Unknown,
 }
 
+#[derive(Debug)]
+pub struct IllustBookmarkState {
+    pub id: u64, // The id used for ordering bookmarks
+    pub private: bool,
+    pub tags: IllustBookmarkTags,
+}
+
+#[derive(Debug)]
 pub struct Illust {
     pub id: u64,
     pub data: IllustData,
@@ -356,4 +500,21 @@ pub async fn get_bookmarks(
             tokio::time::sleep(delay).await;
         }
     }
+}
+
+pub async fn get_illust(user: &Session, illust_id: u64) -> anyhow::Result<Illust> {
+    let url = format!("https://www.pixiv.net/ajax/illust/{}", illust_id);
+
+    let client = reqwest::Client::new();
+    let req = client.get(&url)
+        .header("Cookie", format!("PHPSESSID={};", user.pixiv_cookie))
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
+        .query(&[
+            ("lang", "en"),
+        ])
+        .build()?;
+    let resp = client.execute(req).await?;
+    let json: Response<FetchWorkDetail> = resp.json().await?;
+    let detail = json.into_body()?;
+    Ok(detail.into())
 }

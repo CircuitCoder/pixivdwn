@@ -59,8 +59,12 @@ impl Bookmarks {
                 illust.data.display_title()
             );
 
-            if update_result == crate::db::IllustUpdateResult::Updated && self.termination == TerminationCondition::OnHit {
-                tracing::info!("Encountered an already existing illustration, whose bookmark ID is unchanged. Terminating.");
+            if update_result == crate::db::IllustUpdateResult::Updated
+                && self.termination == TerminationCondition::OnHit
+            {
+                tracing::info!(
+                    "Encountered an already existing illustration, whose bookmark ID is unchanged. Terminating."
+                );
                 break;
             }
 

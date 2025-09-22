@@ -28,6 +28,9 @@ pub enum QueryOrder {
 
 #[derive(clap::ValueEnum, Clone, Copy)]
 pub enum Format {
+    /// Count only
+    Count,
+
     /// ID only
     ID,
 
@@ -84,6 +87,7 @@ impl Query {
         
         let mut sql = format!("SELECT {} FROM illusts", 
             match self.format {
+                Format::Count => "COUNT(*) as count",
                 Format::ID => "id",
                 Format::JSON => "*",
             }
@@ -187,6 +191,11 @@ impl Query {
         use sqlx::Row;
 
         match self.format {
+            Format::Count => {
+                let row = result.into_iter().next().unwrap();
+                let count: i64 = row.try_get("count")?;
+                println!("{}", count);
+            },
             Format::ID => {
                 for row in result {
                     let id: u64 = row.try_get("id")?;

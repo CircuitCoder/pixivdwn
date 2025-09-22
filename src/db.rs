@@ -151,8 +151,8 @@ pub async fn update_illust(
             r#"UPDATE illusts SET
                 title=?,
                 author_id=?,
-                create_date=?,
-                update_date=?,
+                create_date=datetime(?, 'utc'),
+                update_date=datetime(?, 'utc'),
                 x_restrict=?,
                 ai_type=?,
                 illust_state=?,
@@ -200,7 +200,7 @@ pub async fn update_illust(
                 page_count,
                 last_fetch
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'utc')
+                ?, ?, ?, datetime(?, 'utc'), datetime(?, 'utc'), ?, ?, ?, ?, ?, ?, ?, datetime('now', 'utc')
             )"#,
             illust_id,
             fetched_title,

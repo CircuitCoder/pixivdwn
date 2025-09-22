@@ -7,8 +7,9 @@ use clap::Parser;
 #[derive(Parser)]
 struct Args {
     #[arg(long)]
-    /// Pixiv Cookie, quotient of PHPSESSID
-    pixiv_cookie: String,
+    /// Pixiv Cookie, not including the "PHPSESSID=" prefix
+    /// Can also be set via the PIXIV_COOKIE environment variable
+    pixiv_cookie: Option<String>,
 
     #[command(subcommand)]
     command: cmd::Command,
@@ -20,7 +21,8 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
     let args = Args::parse();
 
-    let session = config::Session::new(args.pixiv_cookie, None)?;
+    let pixiv_cookie = args.pixiv_cookie.or_else(|| std::env::var("PIXIV_COOKIE").ok());
+    let session = config::Session::new(pixiv_cookie, None)?;
     args.command.run(&session).await?;
 
     Ok(())

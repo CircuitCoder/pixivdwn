@@ -1,5 +1,6 @@
 pub mod bookmarks;
 pub mod illust;
+pub mod download;
 
 use clap::Subcommand;
 
@@ -8,8 +9,11 @@ pub enum Command {
     /// Sync bookmarks into database
     Bookmarks(bookmarks::Bookmarks),
 
-    /// Download / sync individual illustration by ID
+    /// Sync individual illustration by ID
     Illust(illust::Illust),
+
+    /// Download individual illustration by ID
+    Download(download::Download),
 }
 
 impl Command {
@@ -17,6 +21,8 @@ impl Command {
         match self {
             Command::Bookmarks(cmd) => cmd.run(session).await,
             Command::Illust(cmd) => cmd.run(session).await,
+            Command::Download(cmd) => cmd.run(session).await,
+
         }
     }
 }

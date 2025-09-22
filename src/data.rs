@@ -78,6 +78,7 @@ pub struct BookmarkData {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[allow(unused)]
 pub struct DetailedTag {
     pub tag: String,
     pub locked: bool,
@@ -94,6 +95,7 @@ pub struct DetailedTag {
 pub enum Tags {
     Brief(Vec<String>),
     #[serde(rename_all = "camelCase")]
+    #[allow(unused)]
     Detailed {
         #[serde(deserialize_with = "de_str_to_u64")]
         author_id: u64,
@@ -350,20 +352,22 @@ impl<T> Response<T> {
 }
 
 async fn get_bookmarks_page(
-    user: &Session,
+    session: &Session,
     tag: Option<&str>,
     hidden: bool,
     offset: usize,
     limit: usize,
 ) -> anyhow::Result<Bookmarks> {
+    let pixiv_session = session.pixiv.as_ref().ok_or_else(|| anyhow::anyhow!("Pixiv session is required"))?;
+
     let url = format!(
         "https://www.pixiv.net/ajax/user/{}/illusts/bookmarks",
-        user.uid,
+        pixiv_session.uid,
     );
 
     let client = reqwest::Client::new();
     let req = client.get(&url)
-        .header("Cookie", format!("PHPSESSID={};", user.pixiv_cookie))
+        .header("Cookie", format!("PHPSESSID={};", pixiv_session.cookie))
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
         .query(&[
             ("tag", tag.unwrap_or("")),
@@ -467,7 +471,7 @@ pub struct Illust {
 }
 
 pub async fn get_bookmarks(
-    user: &Session,
+    session: &Session,
     tag: Option<&str>,
     mut offset: usize,
     hidden: bool,
@@ -478,7 +482,7 @@ pub async fn get_bookmarks(
 
     try_stream! {
         loop {
-            let batch = get_bookmarks_page(user, tag, hidden, offset, LIMIT).await?;
+            let batch = get_bookmarks_page(session, tag, hidden, offset, LIMIT).await?;
             let total = batch.total;
             let batch_size = batch.works.len();
 
@@ -502,12 +506,13 @@ pub async fn get_bookmarks(
     }
 }
 
-pub async fn get_illust(user: &Session, illust_id: u64) -> anyhow::Result<Illust> {
+pub async fn get_illust(session: &Session, illust_id: u64) -> anyhow::Result<Illust> {
+    let pixiv_session = session.pixiv.as_ref().ok_or_else(|| anyhow::anyhow!("Pixiv session is required"))?;
     let url = format!("https://www.pixiv.net/ajax/illust/{}", illust_id);
 
     let client = reqwest::Client::new();
     let req = client.get(&url)
-        .header("Cookie", format!("PHPSESSID={};", user.pixiv_cookie))
+        .header("Cookie", format!("PHPSESSID={};", pixiv_session.cookie))
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
         .query(&[
             ("lang", "en"),
@@ -517,4 +522,22 @@ pub async fn get_illust(user: &Session, illust_id: u64) -> anyhow::Result<Illust
     let json: Response<FetchWorkDetail> = resp.json().await?;
     let detail = json.into_body()?;
     Ok(detail.into())
+}
+
+pub async fn get_illust_pages(session: &Session, illust_id: u64) -> anyhow::Result<Vec<Page>> {
+    let pixiv_session = session.pixiv.as_ref().ok_or_else(|| anyhow::anyhow!("Pixiv session is required"))?;
+    let url = format!("https://www.pixiv.net/ajax/illust/{}/pages", illust_id);
+
+    let client = reqwest::Client::new();
+    let req = client.get(&url)
+        .header("Cookie", format!("PHPSESSID={};", pixiv_session.cookie))
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
+        .query(&[
+            ("lang", "en"),
+        ])
+        .build()?;
+    let resp = client.execute(req).await?;
+    let json: Response<Vec<Page>> = resp.json().await?;
+    let pages = json.into_body()?;
+    Ok(pages)
 }

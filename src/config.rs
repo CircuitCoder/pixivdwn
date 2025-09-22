@@ -1,12 +1,13 @@
-pub struct Session {
+pub struct PixivSession {
     pub uid: u64,
-    pub pixiv_cookie: String,
-    pub fanbox_cookie: Option<String>,
+    pub cookie: String,
 }
 
-impl Session {
-    pub fn new(pixiv_cookie: String, fanbox_cookie: Option<String>) -> anyhow::Result<Self> {
-        let uid_seg = pixiv_cookie
+impl TryFrom<&str> for PixivSession {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let uid_seg = value
             .split("_")
             .next()
             .ok_or_else(|| anyhow::anyhow!("Invalid pixiv cookie"))?;
@@ -15,8 +16,27 @@ impl Session {
             .map_err(|_| anyhow::anyhow!("Invalid uid in pixiv cookie"))?;
         Ok(Self {
             uid,
-            pixiv_cookie,
-            fanbox_cookie,
+            cookie: value.to_string(),
+        })
+    }
+}
+
+pub struct Session {
+    pub pixiv: Option<PixivSession>,
+    pub fanbox: Option<String>,
+}
+
+impl Session {
+    pub fn new(pixiv_cookie: Option<String>, fanbox_cookie: Option<String>) -> anyhow::Result<Self> {
+        let pixiv = if let Some(cookie) = pixiv_cookie {
+            Some(cookie.as_str().try_into()?)
+        } else {
+            None
+        };
+
+        Ok(Self {
+            pixiv,
+            fanbox: fanbox_cookie,
         })
     }
 }

@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use clap::Args;
 
 #[derive(Args)]
-pub struct Illust {
+pub struct Download {
     /// Illustration ID
     id: u64,
 
@@ -12,16 +10,14 @@ pub struct Illust {
     dry_run: bool,
 }
 
-impl Illust {
+impl Download {
     pub async fn run(self, session: &crate::config::Session) -> anyhow::Result<()> {
-        let illust = crate::data::get_illust(session, self.id).await?;
+        let illust = crate::data::get_illust_pages(session, self.id).await?;
         if self.dry_run {
             tracing::info!("Fetched: {:?}", illust);
             return Ok(());
         }
 
-        let mut tag_map_ctx: HashMap<String, u64> = HashMap::new();
-        crate::db::update_illust(&illust, &mut tag_map_ctx).await?;
         Ok(())
     }
 }

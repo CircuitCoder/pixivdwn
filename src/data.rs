@@ -127,10 +127,9 @@ where
         where
             M: serde::de::MapAccess<'de>,
         {
-            let map = HashMap::new();
-            while let Some((key, value)) = access.next_entry::<String, Vec<String>>()? {
+            let mut map = HashMap::new();
+            while let Some((key, value)) = access.next_entry::<&str, Vec<String>>()? {
                 let key = key.parse::<u64>().map_err(serde::de::Error::custom)?;
-                let mut map = HashMap::new();
                 map.insert(key, value);
             }
             Ok(map)

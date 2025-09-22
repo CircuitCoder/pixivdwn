@@ -1,6 +1,7 @@
 pub mod bookmarks;
 pub mod download;
 pub mod illust;
+pub mod query;
 
 use clap::Subcommand;
 
@@ -14,6 +15,9 @@ pub enum Command {
 
     /// Download individual illustration by ID
     Download(download::Download),
+
+    /// Query local database
+    Query(query::Query),
 }
 
 impl Command {
@@ -22,6 +26,7 @@ impl Command {
             Command::Bookmarks(cmd) => cmd.run(session).await,
             Command::Illust(cmd) => cmd.run(session).await,
             Command::Download(cmd) => cmd.run(session).await,
+            Command::Query(cmd) => cmd.run().await,
         }
     }
 }

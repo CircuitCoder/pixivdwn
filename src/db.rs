@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use serde::Serialize;
-use sqlx::SqlitePool;
+use sqlx::{sqlite::SqliteRow, SqlitePool};
 use tokio::sync::OnceCell;
 
 use crate::data::{IllustBookmarkTags, IllustState};
@@ -317,4 +317,10 @@ async fn tag_illust_bookmark(
         .execute(&mut **tx)
         .await?;
     Ok(())
+}
+
+pub async fn query_raw(sql: &str) -> anyhow::Result<Vec<SqliteRow>> {
+    let db = get_db().await?;
+    let result = sqlx::query(sql).fetch_all(db).await?;
+    Ok(result)
 }

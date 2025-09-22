@@ -393,7 +393,7 @@ async fn get_bookmarks_page(
 
 // Parsed data
 
-#[derive(sqlx::Type, Debug, Clone, Copy)]
+#[derive(clap::ValueEnum, sqlx::Type, Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum IllustState {
     Normal = 0,

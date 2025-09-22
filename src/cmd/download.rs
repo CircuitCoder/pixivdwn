@@ -19,6 +19,10 @@ pub struct Download {
     /// The illustrations will be saved as `<base_dir>/<illust_id>_p<page>.<ext>`
     #[arg(short, long, default_value = "images")]
     base_dir: String,
+
+    /// Whether to skip canonicalizing the path written into database
+    #[arg(long)]
+    skip_path_canonicalization: bool,
 }
 
 impl Download {
@@ -42,7 +46,10 @@ impl Download {
                 filename,
                 url
             );
-            assert!(filename.starts_with(format!("{}_p{}.", self.id, idx).as_str()));
+            assert!(
+                filename.starts_with(format!("{}_p{}.", self.id, idx).as_str())
+                || filename.starts_with(format!("{}_ugoira{}.", self.id, idx).as_str())
+            );
 
             if !self.dry_run {
                 let mut tmp_file = NamedTempFile::with_prefix_in("pixivdwn_", &self.base_dir)?;
@@ -57,8 +64,16 @@ impl Download {
                 drop(buffered_file);
                 let mut final_path = std::path::PathBuf::from(&self.base_dir);
                 final_path.push(filename);
+                if !self.skip_path_canonicalization {
+                    final_path = final_path.canonicalize()?;
+                }
+
                 tmp_file.persist(&final_path)?;
                 tracing::info!("Saved to {:?}", final_path);
+                let final_path = final_path.to_str().ok_or_else(|| {
+                    anyhow::anyhow!("Failed to convert path")
+                })?;
+                crate::db::update_image(self.id, idx, url, final_path).await?;
             }
         }
 

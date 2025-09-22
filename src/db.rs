@@ -319,6 +319,35 @@ async fn tag_illust_bookmark(
     Ok(())
 }
 
+pub async fn update_image(
+    illust: u64,
+    page: usize,
+    url: &str,
+    path: &str,
+) -> anyhow::Result<()> {
+    let db = get_db().await.unwrap();
+    let illust = illust as i64;
+    let page = page as i64;
+
+    sqlx::query!(
+        r#"INSERT INTO images (illust_id, page, url, path, download_date)
+        VALUES (?, ?, ?, ?, datetime('now', 'utc'))
+        ON CONFLICT(illust_id, page) DO UPDATE SET
+            url=excluded.url,
+            path=excluded.path,
+            download_date=excluded.download_date
+        "#,
+        illust,
+        page,
+        url,
+        path,
+    )
+    .execute(db)
+    .await?;
+
+    Ok(())
+}
+
 pub async fn query_raw(sql: &str) -> anyhow::Result<Vec<SqliteRow>> {
     let db = get_db().await?;
     let result = sqlx::query(sql).fetch_all(db).await?;

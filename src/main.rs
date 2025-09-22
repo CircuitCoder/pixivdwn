@@ -22,7 +22,9 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
     let args = Args::parse();
 
-    let pixiv_cookie = args.pixiv_cookie.or_else(|| std::env::var("PIXIV_COOKIE").ok());
+    let pixiv_cookie = args
+        .pixiv_cookie
+        .or_else(|| std::env::var("PIXIV_COOKIE").ok());
     let session = config::Session::new(pixiv_cookie, None)?;
     args.command.run(&session).await?;
 

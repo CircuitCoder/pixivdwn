@@ -23,11 +23,15 @@ impl TryFrom<&str> for PixivSession {
 
 pub struct Session {
     pub pixiv: Option<PixivSession>,
+    #[allow(unused)]
     pub fanbox: Option<String>,
 }
 
 impl Session {
-    pub fn new(pixiv_cookie: Option<String>, fanbox_cookie: Option<String>) -> anyhow::Result<Self> {
+    pub fn new(
+        pixiv_cookie: Option<String>,
+        fanbox_cookie: Option<String>,
+    ) -> anyhow::Result<Self> {
         let pixiv = if let Some(cookie) = pixiv_cookie {
             Some(cookie.as_str().try_into()?)
         } else {

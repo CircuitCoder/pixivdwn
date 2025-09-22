@@ -204,10 +204,15 @@ impl Into<Illust> for FetchWorkBrief {
 #[derive(Deserialize, Debug)]
 pub struct PageUrls {
     #[serde(alias = "thumb_mini")]
+    #[allow(unused)]
     pub mini: String,
+    #[allow(unused)]
     pub thumb: Option<String>,
+    #[allow(unused)]
     pub small: String,
+    #[allow(unused)]
     pub regular: String,
+
     pub original: String,
 }
 
@@ -241,6 +246,7 @@ pub struct FetchWorkDetail {
     #[allow(unused)]
     pub view_count: u64,
 
+    #[allow(unused)]
     pub urls: PageUrls,
 
     pub is_howto: bool,
@@ -358,7 +364,10 @@ async fn get_bookmarks_page(
     offset: usize,
     limit: usize,
 ) -> anyhow::Result<Bookmarks> {
-    let pixiv_session = session.pixiv.as_ref().ok_or_else(|| anyhow::anyhow!("Pixiv session is required"))?;
+    let pixiv_session = session
+        .pixiv
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Pixiv session is required"))?;
 
     let url = format!(
         "https://www.pixiv.net/ajax/user/{}/illusts/bookmarks",
@@ -507,7 +516,10 @@ pub async fn get_bookmarks(
 }
 
 pub async fn get_illust(session: &Session, illust_id: u64) -> anyhow::Result<Illust> {
-    let pixiv_session = session.pixiv.as_ref().ok_or_else(|| anyhow::anyhow!("Pixiv session is required"))?;
+    let pixiv_session = session
+        .pixiv
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Pixiv session is required"))?;
     let url = format!("https://www.pixiv.net/ajax/illust/{}", illust_id);
 
     let client = reqwest::Client::new();
@@ -525,7 +537,10 @@ pub async fn get_illust(session: &Session, illust_id: u64) -> anyhow::Result<Ill
 }
 
 pub async fn get_illust_pages(session: &Session, illust_id: u64) -> anyhow::Result<Vec<Page>> {
-    let pixiv_session = session.pixiv.as_ref().ok_or_else(|| anyhow::anyhow!("Pixiv session is required"))?;
+    let pixiv_session = session
+        .pixiv
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Pixiv session is required"))?;
     let url = format!("https://www.pixiv.net/ajax/illust/{}/pages", illust_id);
 
     let client = reqwest::Client::new();

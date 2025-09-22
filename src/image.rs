@@ -7,7 +7,12 @@ pub enum DownloadSource {
     Fanbox,
 }
 
-pub async fn download<W: std::io::Write>(session: &Session, src: DownloadSource, url: &str, mut dst: W) -> anyhow::Result<()> {
+pub async fn download<W: std::io::Write>(
+    session: &Session,
+    src: DownloadSource,
+    url: &str,
+    mut dst: W,
+) -> anyhow::Result<()> {
     let client = reqwest::Client::new();
 
     let mut req = client.get(url)
@@ -18,9 +23,8 @@ pub async fn download<W: std::io::Write>(session: &Session, src: DownloadSource,
             if let Some(pixiv) = &session.pixiv {
                 req = req.header("Cookie", format!("PHPSESSID={};", pixiv.cookie));
             }
-        },
+        }
         DownloadSource::Fanbox => unimplemented!(),
-        _ => {},
     }
 
     let resp = req.send().await?;

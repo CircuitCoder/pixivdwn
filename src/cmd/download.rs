@@ -9,13 +9,13 @@ pub struct Download {
     /// Dry run, only fech and print the info
     #[arg(long)]
     dry_run: bool,
-    
+
     /// Create base directory if not exist
-    #[arg(short='p', long)]
+    #[arg(short = 'p', long)]
     mkdir: bool,
 
     /// Base directory to save the illustration
-    /// 
+    ///
     /// The illustrations will be saved as `<base_dir>/<illust_id>_p<page>.<ext>`
     #[arg(short, long, default_value = "images")]
     base_dir: String,
@@ -33,13 +33,27 @@ impl Download {
         for (idx, page) in pages.iter().enumerate() {
             let url = &page.urls.original;
             let filename = url.split('/').last().unwrap();
-            tracing::info!("Page {}/{}: {} x {}, {} from {}", idx+1, tot_pages, page.width, page.height, filename, url);
+            tracing::info!(
+                "Page {}/{}: {} x {}, {} from {}",
+                idx + 1,
+                tot_pages,
+                page.width,
+                page.height,
+                filename,
+                url
+            );
             assert!(filename.starts_with(format!("{}_p{}.", self.id, idx).as_str()));
 
             if !self.dry_run {
                 let mut tmp_file = NamedTempFile::with_prefix_in("pixivdwn_", &self.base_dir)?;
                 let mut buffered_file = std::io::BufWriter::new(tmp_file.as_file_mut());
-                crate::image::download(session, crate::image::DownloadSource::Pixiv, url, &mut buffered_file).await?;
+                crate::image::download(
+                    session,
+                    crate::image::DownloadSource::Pixiv,
+                    url,
+                    &mut buffered_file,
+                )
+                .await?;
                 drop(buffered_file);
                 let mut final_path = std::path::PathBuf::from(&self.base_dir);
                 final_path.push(filename);

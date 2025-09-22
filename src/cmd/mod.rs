@@ -1,6 +1,6 @@
 pub mod bookmarks;
-pub mod illust;
 pub mod download;
+pub mod illust;
 
 use clap::Subcommand;
 
@@ -22,7 +22,6 @@ impl Command {
             Command::Bookmarks(cmd) => cmd.run(session).await,
             Command::Illust(cmd) => cmd.run(session).await,
             Command::Download(cmd) => cmd.run(session).await,
-
         }
     }
 }

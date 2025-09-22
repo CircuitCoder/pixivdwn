@@ -101,7 +101,19 @@ impl Query {
         if let Some(download_state) = self.download_state {
             // This is a little more complex. We need to query the downloaded image table
             // to get the number of downloaded pages, and compare with the fetched number of pages.
-            unimplemented!();
+
+            wheres.push(format!(
+                r#"
+                  page_count {} (
+                    SELECT COUNT(*) FROM images
+                    WHERE illust_id = illusts.id
+                  )
+                "#,
+                match download_state {
+                    QueryDownloadState::FullyDownloaded => "=",
+                    QueryDownloadState::NotFullyDownloaded => "!=",
+                }
+            ));
         }
 
         if self.tag.len() > 0 {

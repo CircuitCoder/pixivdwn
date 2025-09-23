@@ -339,23 +339,31 @@ pub async fn update_image(
     page: usize,
     url: &str,
     path: &str,
+    width: u64,
+    height: u64,
 ) -> anyhow::Result<()> {
     let db = get_db().await.unwrap();
     let illust = illust as i64;
     let page = page as i64;
+    let width = width as i64;
+    let height = height as i64;
 
     sqlx::query!(
-        r#"INSERT INTO images (illust_id, page, url, path, download_date)
-        VALUES (?, ?, ?, ?, datetime('now', 'utc'))
+        r#"INSERT INTO images (illust_id, page, url, path, download_date, width, height)
+        VALUES (?, ?, ?, ?, datetime('now', 'utc'), ?, ?)
         ON CONFLICT(illust_id, page) DO UPDATE SET
             url=excluded.url,
             path=excluded.path,
-            download_date=excluded.download_date
+            download_date=excluded.download_date,
+            width=excluded.width,
+            height=excluded.height
         "#,
         illust,
         page,
         url,
         path,
+        width,
+        height,
     )
     .execute(db)
     .await?;

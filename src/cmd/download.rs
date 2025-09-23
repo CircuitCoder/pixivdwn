@@ -1,5 +1,25 @@
+use std::path::PathBuf;
+
 use clap::Args;
 use tempfile::NamedTempFile;
+
+#[derive(clap::ValueEnum, Clone, Copy)]
+enum DatabasePathFormat {
+    /// Only store the path relative to the base.
+    ///
+    /// This make it easier to move the base directory with images inside them.
+    Inline,
+
+    /// Store the path as-is after concating with the base directory,
+    ///
+    /// Not recommended, but may be useful in some cases.
+    AsIs,
+
+    /// Store the absolute path to the image.
+    ///
+    /// Useful if the base directory is often changed, but the image themselves are not moved.
+    Absolute,
+}
 
 #[derive(Args)]
 pub struct Download {
@@ -21,8 +41,8 @@ pub struct Download {
     base_dir: String,
 
     /// Whether to skip canonicalizing the path written into database
-    #[arg(long)]
-    skip_path_canonicalization: bool,
+    #[arg(long, value_enum, default_value_t = DatabasePathFormat::Absolute)]
+    database_path_format: DatabasePathFormat,
 }
 
 impl Download {
@@ -30,6 +50,8 @@ impl Download {
         if self.mkdir {
             std::fs::create_dir_all(&self.base_dir)?;
         }
+
+        // FIXME: handle ugoira
 
         let pages = crate::data::get_illust_pages(session, self.id).await?;
         let tot_pages = pages.len();
@@ -62,18 +84,22 @@ impl Download {
                 )
                 .await?;
                 drop(buffered_file);
-                let mut final_path = std::path::PathBuf::from(&self.base_dir);
+                let mut final_path = PathBuf::from(&self.base_dir);
                 final_path.push(filename);
-                if !self.skip_path_canonicalization {
-                    final_path = final_path.canonicalize()?;
-                }
+
+                let written_path = match self.database_path_format {
+                    DatabasePathFormat::Inline => PathBuf::from(filename),
+                    DatabasePathFormat::AsIs => final_path.clone(),
+                    DatabasePathFormat::Absolute => final_path.canonicalize()?,
+                };
 
                 tmp_file.persist(&final_path)?;
                 tracing::info!("Saved to {:?}", final_path);
-                let final_path = final_path.to_str().ok_or_else(|| {
+                let written_path = written_path.to_str().ok_or_else(|| {
                     anyhow::anyhow!("Failed to convert path")
                 })?;
-                crate::db::update_image(self.id, idx, url, final_path).await?;
+                // FIXME: is this reliable for ugoira?
+                crate::db::update_image(self.id, idx, url, written_path, page.width, page.height).await?;
             }
         }
 

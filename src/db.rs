@@ -101,7 +101,7 @@ pub async fn update_illust(
             let rows_affected = sqlx::query!(
                 r#"
                 UPDATE authors SET account = ?
-                WHERE id = ? AND (account IS NULL OR account = '')
+                WHERE id = ?
                 "#,
                 account,
                 author_id,

@@ -40,7 +40,7 @@ pub struct Download {
     dry_run: bool,
 
     /// Create base directory if not exist
-    #[arg(short = 'p', long)]
+    #[arg(long)]
     mkdir: bool,
 
     /// Base directory to save the illustration
@@ -56,6 +56,10 @@ pub struct Download {
     /// Force download type.
     #[arg(short = 't', long)]
     download_type: Option<DownloadType>,
+
+    /// Show progress bar. The download speed is based on the *UNZIPPED* stream, so don't be surprised if it exceeds your bandwidth.
+    #[arg(short, long)]
+    progress: bool,
 }
 
 impl Download {
@@ -175,6 +179,7 @@ impl Download {
             crate::image::DownloadSource::Pixiv,
             url,
             &mut buffered_file,
+            self.progress,
         )
         .await?;
         drop(buffered_file);

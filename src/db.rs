@@ -4,7 +4,7 @@ use serde::Serialize;
 use sqlx::{sqlite::SqliteRow, SqlitePool};
 use tokio::sync::OnceCell;
 
-use crate::data::{IllustBookmarkTags, IllustState};
+use crate::{data::{IllustBookmarkTags, IllustState}};
 
 static DB: OnceCell<sqlx::SqlitePool> = OnceCell::const_new();
 
@@ -369,6 +369,18 @@ pub async fn update_image(
     .await?;
 
     Ok(())
+}
+
+pub async fn get_illust_type(illust_id: u64) -> anyhow::Result<Option<crate::data::IllustType>> {
+    let db = get_db().await?;
+    let illust_id = illust_id as i64;
+    let rec = sqlx::query!(
+        r#"SELECT illust_type as "illust_type!: crate::data::IllustType" FROM illusts WHERE id = ?"#,
+        illust_id,
+    )
+    .fetch_optional(db)
+    .await?;
+    Ok(rec.map(|r| r.illust_type))
 }
 
 pub async fn query_raw(sql: &str) -> anyhow::Result<Vec<SqliteRow>> {

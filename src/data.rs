@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use async_stream::try_stream;
-use serde::{Deserialize, de::IgnoredAny};
+use serde::{Deserialize, de::IgnoredAny, Serialize};
 use serde_repr::Deserialize_repr;
 
 use crate::config::Session;
@@ -342,6 +342,23 @@ impl Bookmarks {
     }
 }
 
+#[derive(Deserialize, Serialize)]
+pub struct UgoiraFrame {
+    pub file: String,
+    pub delay: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UgoiraMeta {
+    #[allow(unused)]
+    pub src: String,
+    pub original_src: String,
+    #[serde(rename = "mime_type")]
+    pub mime_type: String,
+    pub frames: Vec<UgoiraFrame>,
+}
+
 #[derive(Deserialize)]
 pub struct Response<T> {
     pub error: bool,
@@ -558,4 +575,25 @@ pub async fn get_illust_pages(session: &Session, illust_id: u64) -> anyhow::Resu
     let json: Response<Vec<Page>> = resp.json().await?;
     let pages = json.into_body()?;
     Ok(pages)
+}
+
+pub async fn get_illust_ugoira_meta(session: &Session, illust_id: u64) -> anyhow::Result<UgoiraMeta> {
+    let pixiv_session = session
+        .pixiv
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Pixiv session is required"))?;
+    let url = format!("https://www.pixiv.net/ajax/illust/{}/ugoira_meta", illust_id);
+
+    let client = reqwest::Client::new();
+    let req = client.get(&url)
+        .header("Cookie", format!("PHPSESSID={};", pixiv_session.cookie))
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
+        .query(&[
+            ("lang", "en"),
+        ])
+        .build()?;
+    let resp = client.execute(req).await?;
+    let json: Response<UgoiraMeta> = resp.json().await?;
+    let meta = json.into_body()?;
+    Ok(meta)
 }

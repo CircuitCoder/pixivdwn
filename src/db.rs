@@ -140,7 +140,7 @@ pub async fn update_illust(
     let fetched_illust_type = fetched_data.map(|d| d.illust_type);
     let fetched_page_count = fetched_data.map(|d| d.page_count as i64);
 
-    let update_type = if let Some(orig) = &orig {
+    let update_type: IllustUpdateResult = if let Some(orig) = &orig {
         // Set last_fetch no matter what
         sqlx::query!(
             "UPDATE illusts SET last_fetch = datetime('now', 'utc') WHERE id = ?",
@@ -237,7 +237,7 @@ pub async fn update_illust(
     // If this is normal, also update last_successful_fetch, copy from last_fetch
     if let IllustState::Normal = illust.state {
         sqlx::query!(
-            "UPDATE illusts SET last_successful_fetch = last_fetch WHERE id = ?",
+            "UPDATE illusts SET last_successful_fetch = last_fetch, corrupted = FALSE WHERE id = ?",
             illust_id
         )
         .execute(&mut *tx)

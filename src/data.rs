@@ -133,6 +133,7 @@ pub struct FetchWorkBrief {
     #[serde(deserialize_with = "de_str_or_u64_to_u64")]
     user_id: u64,
     user_name: String,
+    user_account: Option<String>,
 
     bookmark_data: BookmarkData,
     create_date: chrono::DateTime<chrono::FixedOffset>,
@@ -175,6 +176,7 @@ impl Into<Illust> for FetchWorkBrief {
                 author: Illustrator {
                     id: self.user_id,
                     name: self.user_name,
+                    account: self.user_account,
                 },
                 create_date: self.create_date,
                 update_date: self.update_date,
@@ -405,6 +407,7 @@ pub enum IllustState {
 pub struct Illustrator {
     pub id: u64,
     pub name: String,
+    pub account: Option<String>,
 }
 
 #[derive(Debug)]

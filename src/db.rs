@@ -96,6 +96,21 @@ pub async fn update_illust(
         )
         .execute(&mut *tx)
         .await?;
+
+        if let Some(account) = &inner.author.account {
+            let rows_affected = sqlx::query!(
+                r#"
+                UPDATE authors SET account = ?
+                WHERE id = ? AND (account IS NULL OR account = '')
+                "#,
+                account,
+                author_id,
+            )
+            .execute(&mut *tx)
+            .await?
+            .rows_affected();
+            assert_eq!(rows_affected, 1);
+        }
     }
 
     let illust_id = illust.id as i64;
@@ -231,7 +246,7 @@ pub async fn update_illust(
 
     if let Some(detail) = illust.data.as_detail() {
         // Update details
-        let row_changed = sqlx::query!(
+        let rows_affected = sqlx::query!(
             r#"UPDATE illusts SET
                 content_desc=?,
                 content_is_howto=?,
@@ -246,7 +261,7 @@ pub async fn update_illust(
         .execute(&mut *tx)
         .await?
         .rows_affected();
-        assert_eq!(row_changed, 1);
+        assert_eq!(rows_affected, 1);
     }
 
     // TODO: add tag details

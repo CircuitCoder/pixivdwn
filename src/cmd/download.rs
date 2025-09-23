@@ -1,4 +1,4 @@
-use std::{io::Read, path::PathBuf};
+use std::{collections::HashSet, io::Read, path::PathBuf};
 
 use clap::Args;
 use tempfile::NamedTempFile;
@@ -60,6 +60,10 @@ pub struct Download {
     /// Show progress bar. The download speed is based on the *UNZIPPED* stream, so don't be surprised if it exceeds your bandwidth.
     #[arg(short, long)]
     progress: bool,
+
+    /// Force downloading existing pages
+    #[arg(long)]
+    force_redownload: bool,
 }
 
 impl Download {
@@ -81,12 +85,23 @@ impl Download {
         };
         let download_type = self.download_type.unwrap_or(induced_download_type);
 
+        let skipped_pages = if self.force_redownload {
+            HashSet::new()
+        } else {
+            crate::db::get_existing_pages(self.id).await?
+        };
+
         match download_type {
             DownloadType::Image => {
                 let pages = crate::data::get_illust_pages(session, self.id).await?;
                 let tot_pages = pages.len();
                 tracing::info!("Downloading {} pages...", tot_pages);
                 for (idx, page) in pages.iter().enumerate() {
+                    if skipped_pages.contains(&idx) {
+                        tracing::info!("Page {}/{}: Skipping", idx + 1, tot_pages);
+                        continue;
+                    }
+
                     let url = &page.urls.original;
                     let filename = url.split('/').last().unwrap();
                     tracing::info!(
@@ -122,6 +137,11 @@ impl Download {
                 }
             }
             DownloadType::Ugoira => {
+                if skipped_pages.contains(&0) {
+                    tracing::info!("Ugoira already downloaded, skipping");
+                    return Ok(());
+                }
+
                 let meta = crate::data::get_illust_ugoira_meta(session, self.id).await?;
                 tracing::info!("Downloading ugoira...");
                 let url = &meta.original_src;

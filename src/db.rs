@@ -411,6 +411,18 @@ pub async fn get_illust_type(illust_id: u64) -> anyhow::Result<Option<crate::dat
     Ok(rec.map(|r| r.illust_type))
 }
 
+pub async fn get_existing_pages<B: FromIterator<usize>>(illust_id: u64) -> anyhow::Result<B> {
+    let db = get_db().await?;
+    let illust_id = illust_id as i64;
+    let recs = sqlx::query!(
+        r#"SELECT page FROM images WHERE illust_id = ? ORDER BY page ASC"#,
+        illust_id,
+    )
+    .fetch_all(db)
+    .await?;
+    Ok(recs.into_iter().map(|r| r.page as usize).collect())
+}
+
 pub async fn query_raw(sql: &str) -> anyhow::Result<Vec<SqliteRow>> {
     let db = get_db().await?;
     let result = sqlx::query(sql).fetch_all(db).await?;

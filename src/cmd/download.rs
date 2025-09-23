@@ -101,7 +101,7 @@ impl Download {
                         let written_path = written_path.to_str().ok_or_else(|| {
                             anyhow::anyhow!("Failed to convert path")
                         })?;
-                        crate::db::update_image(self.id, idx, url, written_path, page.width, page.height).await?;
+                        crate::db::update_image(self.id, idx, url, written_path, page.width, page.height, None).await?;
                     }
                 }
             },
@@ -137,7 +137,7 @@ impl Download {
                     let written_path = written_path.to_str().ok_or_else(|| {
                         anyhow::anyhow!("Failed to convert path")
                     })?;
-                    crate::db::update_image(self.id, 0, url, written_path, width as u64, height as u64).await?;
+                    crate::db::update_image(self.id, 0, url, written_path, width as u64, height as u64, Some(meta.frames)).await?;
                 }
             },
         }

@@ -4,7 +4,7 @@ use serde::Serialize;
 use sqlx::{sqlite::SqliteRow, SqlitePool};
 use tokio::sync::OnceCell;
 
-use crate::{data::{IllustBookmarkTags, IllustState}};
+use crate::data::{IllustBookmarkTags, IllustState, UgoiraFrame};
 
 static DB: OnceCell<sqlx::SqlitePool> = OnceCell::const_new();
 
@@ -341,22 +341,25 @@ pub async fn update_image(
     path: &str,
     width: u64,
     height: u64,
+    ugoira_frames: Option<Vec<UgoiraFrame>>
 ) -> anyhow::Result<()> {
     let db = get_db().await.unwrap();
     let illust = illust as i64;
     let page = page as i64;
     let width = width as i64;
     let height = height as i64;
+    let ugoira_frames = ugoira_frames.map(|f| serde_json::to_string(&f)).transpose()?;
 
     sqlx::query!(
-        r#"INSERT INTO images (illust_id, page, url, path, download_date, width, height)
-        VALUES (?, ?, ?, ?, datetime('now', 'utc'), ?, ?)
+        r#"INSERT INTO images (illust_id, page, url, path, download_date, width, height, ugoira_frames)
+        VALUES (?, ?, ?, ?, datetime('now', 'utc'), ?, ?, ?)
         ON CONFLICT(illust_id, page) DO UPDATE SET
             url=excluded.url,
             path=excluded.path,
             download_date=excluded.download_date,
             width=excluded.width,
-            height=excluded.height
+            height=excluded.height,
+            ugoira_frames=excluded.ugoira_frames
         "#,
         illust,
         page,
@@ -364,6 +367,7 @@ pub async fn update_image(
         path,
         width,
         height,
+        ugoira_frames,
     )
     .execute(db)
     .await?;

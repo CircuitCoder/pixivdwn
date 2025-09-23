@@ -9,6 +9,12 @@ pub enum QueryDownloadState {
 
     /// Only illustrations with missing downloaded pages
     NotFullyDownloaded,
+
+    /// Downloaded more than current page count
+    ExtraDownloaded,
+
+    /// Exactly downloaded current page count
+    ExactDownloaded,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy)]
@@ -115,8 +121,10 @@ impl Query {
                   )
                 "#,
                 match download_state {
-                    QueryDownloadState::FullyDownloaded => "=",
-                    QueryDownloadState::NotFullyDownloaded => "!=",
+                    QueryDownloadState::FullyDownloaded => "<=",
+                    QueryDownloadState::NotFullyDownloaded => ">",
+                    QueryDownloadState::ExtraDownloaded => "<",
+                    QueryDownloadState::ExactDownloaded => "=",
                 }
             ));
         }

@@ -12,6 +12,10 @@ struct Args {
     /// Can also be set via the PIXIV_COOKIE environment variable
     pixiv_cookie: Option<String>,
 
+    /// Database URL, Can also be set via the DATABASE_URL environment variable
+    #[arg(long)]
+    database_url: Option<String>,
+
     #[command(subcommand)]
     command: cmd::Command,
 }
@@ -21,6 +25,10 @@ async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv()?;
     tracing_subscriber::fmt::init();
     let args = Args::parse();
+
+    let database_url = args.database_url.or_else(|| std::env::var("DATABASE_URL").ok())
+        .ok_or_else(|| anyhow::anyhow!("Please specify a database URL via --database-url or the DATABASE_URL environment variable"))?;
+    crate::db::set_url(database_url).await?;
 
     let pixiv_cookie = args
         .pixiv_cookie

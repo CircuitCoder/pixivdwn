@@ -1,12 +1,20 @@
 use std::collections::HashMap;
 
 use serde::Serialize;
-use sqlx::{SqlitePool, sqlite::SqliteRow};
+use sqlx::{migrate::Migrator, sqlite::{SqliteConnectOptions, SqliteRow}, SqlitePool};
 use tokio::sync::OnceCell;
 
 use crate::data::{IllustBookmarkTags, IllustState, UgoiraFrame};
 
 static DB: OnceCell<sqlx::SqlitePool> = OnceCell::const_new();
+static DBURL: OnceCell<String> = OnceCell::const_new();
+static MIGRATOR: Migrator = sqlx::migrate!();
+
+pub async fn set_url(url: String) -> anyhow::Result<()> {
+    DBURL
+        .set(url)
+        .map_err(|_| anyhow::anyhow!("Database URL can only be set once"))
+}
 
 struct TagIterator<I: Iterator<Item = u64> + Clone>(I);
 impl<I: Iterator<Item = u64> + Clone> Serialize for TagIterator<I> {
@@ -18,13 +26,27 @@ impl<I: Iterator<Item = u64> + Clone> Serialize for TagIterator<I> {
 async fn get_db() -> anyhow::Result<&'static sqlx::SqlitePool> {
     let db = DB
         .get_or_try_init::<anyhow::Error, _, _>(|| async {
-            let key = std::env::var("DATABASE_URL")?;
-            let db = SqlitePool::connect(&key).await?;
+            let url = DBURL.get().ok_or_else(|| anyhow::anyhow!("Database URL not set"))?;
+            let db = SqlitePool::connect(&url).await?;
             Ok(db)
         })
         .await?;
 
     Ok(db)
+}
+
+pub async fn setup_db() -> anyhow::Result<()> {
+    let db = DB
+        .get_or_try_init::<anyhow::Error, _, _>(|| async {
+            let url = DBURL.get().ok_or_else(|| anyhow::anyhow!("Database URL not set"))?;
+            let opts: SqliteConnectOptions = url.parse()?;
+            let opts = opts.create_if_missing(true);
+            let db = SqlitePool::connect_with(opts).await?;
+            Ok(db)
+        })
+        .await?;
+    MIGRATOR.run(db).await?;
+    Ok(())
 }
 
 pub async fn get_tag_mapping<S: AsRef<str>>(tag: S) -> anyhow::Result<u64> {

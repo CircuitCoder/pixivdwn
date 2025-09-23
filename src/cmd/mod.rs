@@ -2,6 +2,7 @@ pub mod bookmarks;
 pub mod download;
 pub mod illust;
 pub mod query;
+pub mod database;
 
 use clap::Subcommand;
 
@@ -18,6 +19,9 @@ pub enum Command {
 
     /// Query local database
     Query(query::Query),
+
+    /// Database management
+    Database(database::Database),
 }
 
 impl Command {
@@ -27,6 +31,7 @@ impl Command {
             Command::Illust(cmd) => cmd.run(session).await,
             Command::Download(cmd) => cmd.run(session).await,
             Command::Query(cmd) => cmd.run().await,
+            Command::Database(cmd) => cmd.run().await,
         }
     }
 }

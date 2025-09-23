@@ -84,8 +84,9 @@ pub struct Query {
 impl Query {
     pub async fn run(self) -> anyhow::Result<()> {
         // You know what, let's concat SQL
-        
-        let mut sql = format!("SELECT {} FROM illusts", 
+
+        let mut sql = format!(
+            "SELECT {} FROM illusts",
             match self.format {
                 Format::Count => "COUNT(*) as count",
                 Format::ID => "id",
@@ -195,16 +196,16 @@ impl Query {
                 let row = result.into_iter().next().unwrap();
                 let count: i64 = row.try_get("count")?;
                 println!("{}", count);
-            },
+            }
             Format::ID => {
                 for row in result {
                     let id: u64 = row.try_get("id")?;
                     println!("{}", id);
                 }
-            },
+            }
             Format::JSON => {
                 unimplemented!();
-            },
+            }
         }
         Ok(())
     }

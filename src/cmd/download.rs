@@ -64,15 +64,18 @@ impl Download {
             std::fs::create_dir_all(&self.base_dir)?;
         }
 
-        let illust_type = crate::db::get_illust_type(self.id).await?
-          .ok_or_else(|| anyhow::anyhow!("{} not found in DB. Please run `pixivdwn illust {}` first.", self.id, self.id))?;
+        let illust_type = crate::db::get_illust_type(self.id).await?.ok_or_else(|| {
+            anyhow::anyhow!(
+                "{} not found in DB. Please run `pixivdwn illust {}` first.",
+                self.id,
+                self.id
+            )
+        })?;
         let induced_download_type = match illust_type {
             crate::data::IllustType::Ugoira => DownloadType::Ugoira,
             _ => DownloadType::Image,
         };
         let download_type = self.download_type.unwrap_or(induced_download_type);
-
-        // FIXME: handle ugoira
 
         match download_type {
             DownloadType::Image => {
@@ -93,59 +96,78 @@ impl Download {
                     );
                     assert!(
                         filename.starts_with(format!("{}_p{}.", self.id, idx).as_str())
-                        || filename.starts_with(format!("{}_ugoira{}.", self.id, idx).as_str())
+                            || filename.starts_with(format!("{}_ugoira{}.", self.id, idx).as_str())
                     );
 
                     if !self.dry_run {
                         let (written_path, _) = self.download_file(session, url, filename).await?;
-                        let written_path = written_path.to_str().ok_or_else(|| {
-                            anyhow::anyhow!("Failed to convert path")
-                        })?;
-                        crate::db::update_image(self.id, idx, url, written_path, page.width, page.height, None).await?;
+                        let written_path = written_path
+                            .to_str()
+                            .ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?;
+                        crate::db::update_image(
+                            self.id,
+                            idx,
+                            url,
+                            written_path,
+                            page.width,
+                            page.height,
+                            None,
+                        )
+                        .await?;
                     }
                 }
-            },
+            }
             DownloadType::Ugoira => {
                 let meta = crate::data::get_illust_ugoira_meta(session, self.id).await?;
                 tracing::info!("Downloading ugoira...");
                 let url = &meta.original_src;
                 let filename = url.split('/').last().unwrap();
-                tracing::info!(
-                    "Ugoira pack {} from {}",
-                    filename,
-                    url
-                );
+                tracing::info!("Ugoira pack {} from {}", filename, url);
                 assert!(
                     filename.starts_with(format!("{}_ugoira", self.id).as_str())
-                    && filename.ends_with(".zip")
+                        && filename.ends_with(".zip")
                 );
 
                 if !self.dry_run {
-                    let (written_path, final_path) = self.download_file(session, url, filename).await?;
+                    let (written_path, final_path) =
+                        self.download_file(session, url, filename).await?;
                     let mut archive = zip::ZipArchive::new(std::fs::File::open(&final_path)?)?;
                     let mut file = archive.by_name(&meta.frames[0].file)?;
                     let mut file_content = Vec::new();
                     file.read_to_end(&mut file_content)?;
                     let file_content = std::io::Cursor::new(file_content);
 
-                    let image_fmt = image::ImageFormat::from_mime_type(&meta.mime_type).ok_or_else(|| {
-                        anyhow::anyhow!("Unknown mime type: {}", meta.mime_type)
-                    })?;
+                    let image_fmt = image::ImageFormat::from_mime_type(&meta.mime_type)
+                        .ok_or_else(|| anyhow::anyhow!("Unknown mime type: {}", meta.mime_type))?;
                     let image = image::ImageReader::with_format(file_content, image_fmt);
                     let (width, height) = image.into_dimensions()?;
 
-                    let written_path = written_path.to_str().ok_or_else(|| {
-                        anyhow::anyhow!("Failed to convert path")
-                    })?;
-                    crate::db::update_image(self.id, 0, url, written_path, width as u64, height as u64, Some(meta.frames)).await?;
+                    let written_path = written_path
+                        .to_str()
+                        .ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?;
+                    crate::db::update_image(
+                        self.id,
+                        0,
+                        url,
+                        written_path,
+                        width as u64,
+                        height as u64,
+                        Some(meta.frames),
+                    )
+                    .await?;
                 }
-            },
+            }
         }
 
         Ok(())
     }
 
-    async fn download_file(&self, session: &crate::config::Session, url: &str, filename: &str) -> anyhow::Result<(PathBuf, PathBuf)> {
+    async fn download_file(
+        &self,
+        session: &crate::config::Session,
+        url: &str,
+        filename: &str,
+    ) -> anyhow::Result<(PathBuf, PathBuf)> {
         let mut tmp_file = NamedTempFile::with_prefix_in("pixivdwn_", &self.base_dir)?;
         let mut buffered_file = std::io::BufWriter::new(tmp_file.as_file_mut());
         crate::image::download(

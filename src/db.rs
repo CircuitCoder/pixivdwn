@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use serde::Serialize;
-use sqlx::{sqlite::SqliteRow, SqlitePool};
+use sqlx::{SqlitePool, sqlite::SqliteRow};
 use tokio::sync::OnceCell;
 
 use crate::data::{IllustBookmarkTags, IllustState, UgoiraFrame};
@@ -341,14 +341,16 @@ pub async fn update_image(
     path: &str,
     width: u64,
     height: u64,
-    ugoira_frames: Option<Vec<UgoiraFrame>>
+    ugoira_frames: Option<Vec<UgoiraFrame>>,
 ) -> anyhow::Result<()> {
     let db = get_db().await.unwrap();
     let illust = illust as i64;
     let page = page as i64;
     let width = width as i64;
     let height = height as i64;
-    let ugoira_frames = ugoira_frames.map(|f| serde_json::to_string(&f)).transpose()?;
+    let ugoira_frames = ugoira_frames
+        .map(|f| serde_json::to_string(&f))
+        .transpose()?;
 
     sqlx::query!(
         r#"INSERT INTO images (illust_id, page, url, path, download_date, width, height, ugoira_frames)

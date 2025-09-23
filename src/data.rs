@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use async_stream::try_stream;
-use serde::{Deserialize, de::IgnoredAny, Serialize};
+use serde::{Deserialize, Serialize, de::IgnoredAny};
 use serde_repr::Deserialize_repr;
 
 use crate::config::Session;
@@ -577,12 +577,18 @@ pub async fn get_illust_pages(session: &Session, illust_id: u64) -> anyhow::Resu
     Ok(pages)
 }
 
-pub async fn get_illust_ugoira_meta(session: &Session, illust_id: u64) -> anyhow::Result<UgoiraMeta> {
+pub async fn get_illust_ugoira_meta(
+    session: &Session,
+    illust_id: u64,
+) -> anyhow::Result<UgoiraMeta> {
     let pixiv_session = session
         .pixiv
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Pixiv session is required"))?;
-    let url = format!("https://www.pixiv.net/ajax/illust/{}/ugoira_meta", illust_id);
+    let url = format!(
+        "https://www.pixiv.net/ajax/illust/{}/ugoira_meta",
+        illust_id
+    );
 
     let client = reqwest::Client::new();
     let req = client.get(&url)

@@ -24,12 +24,14 @@ impl TryFrom<&str> for UIDSession {
 pub struct Session {
     pub pixiv: Option<UIDSession>,
     pub fanbox: Option<UIDSession>,
+    pub fanbox_full: Option<String>,
 }
 
 impl Session {
     pub fn new(
         pixiv_cookie: Option<String>,
         fanbox_cookie: Option<String>,
+        fanbox_full: Option<String>,
     ) -> anyhow::Result<Self> {
         let pixiv = pixiv_cookie.map(|e| UIDSession::try_from(e.as_str())).transpose()?;
         let fanbox = fanbox_cookie.map(|e| UIDSession::try_from(e.as_str())).transpose()?;
@@ -37,6 +39,7 @@ impl Session {
         Ok(Self {
             pixiv,
             fanbox,
+            fanbox_full,
         })
     }
 }

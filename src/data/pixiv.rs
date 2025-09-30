@@ -355,7 +355,7 @@ async fn get_bookmarks_page(
         pixiv_session.uid,
     );
 
-    let client = reqwest::Client::new();
+    let client = wreq::Client::new();
     let req = client.get(&url)
         .header("Cookie", format!("PHPSESSID={};", pixiv_session.cookie))
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
@@ -504,7 +504,7 @@ pub async fn get_illust(session: &Session, illust_id: u64) -> anyhow::Result<Ill
         .ok_or_else(|| anyhow::anyhow!("Pixiv session is required"))?;
     let url = format!("https://www.pixiv.net/ajax/illust/{}", illust_id);
 
-    let client = reqwest::Client::new();
+    let client = wreq::Client::new();
     let req = client.get(&url)
         .header("Cookie", format!("PHPSESSID={};", pixiv_session.cookie))
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
@@ -525,7 +525,7 @@ pub async fn get_illust_pages(session: &Session, illust_id: u64) -> anyhow::Resu
         .ok_or_else(|| anyhow::anyhow!("Pixiv session is required"))?;
     let url = format!("https://www.pixiv.net/ajax/illust/{}/pages", illust_id);
 
-    let client = reqwest::Client::new();
+    let client = wreq::Client::new();
     let req = client.get(&url)
         .header("Cookie", format!("PHPSESSID={};", pixiv_session.cookie))
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
@@ -552,7 +552,7 @@ pub async fn get_illust_ugoira_meta(
         illust_id
     );
 
-    let client = reqwest::Client::new();
+    let client = wreq::Client::new();
     let req = client.get(&url)
         .header("Cookie", format!("PHPSESSID={};", pixiv_session.cookie))
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")

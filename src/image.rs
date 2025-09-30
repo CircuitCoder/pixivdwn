@@ -14,7 +14,7 @@ pub async fn download<W: std::io::Write>(
     mut dst: W,
     show_progress: bool,
 ) -> anyhow::Result<()> {
-    let client = reqwest::Client::new();
+    let client = wreq::Client::new();
 
     let mut req = client.get(url)
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36");

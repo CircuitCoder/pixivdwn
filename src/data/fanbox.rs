@@ -81,12 +81,54 @@ pub struct FetchPostFile {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct FetchPostBody {
+pub struct FetchPostBodyRich {
     pub blocks: Vec<FetchPostBlock>,
     pub image_map: HashMap<String, FetchPostImage>,
     pub file_map: HashMap<String, FetchPostFile>,
     pub embed_map: HashMap<String, serde_json::Value>,
     pub url_embed_map: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FetchPostBodySimple {
+    pub text: String,
+    pub images: Vec<FetchPostImage>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+pub enum FetchPostBody {
+    Rich(FetchPostBodyRich),
+    Simple(FetchPostBodySimple),
+}
+
+impl FetchPostBody {
+    pub fn images<'a>(&'a self) -> Box<dyn Iterator<Item = &'a FetchPostImage> + 'a> {
+        match self {
+            FetchPostBody::Rich(rich) => Box::new(rich.image_map.values()),
+            FetchPostBody::Simple(simple) => Box::new(simple.images.iter()),
+        }
+    }
+
+    pub fn files<'a>(&'a self) -> Box<dyn Iterator<Item = &'a FetchPostFile> + 'a> {
+        match self {
+            FetchPostBody::Rich(rich) => Box::new(rich.file_map.values()),
+            FetchPostBody::Simple(_) => Box::new(std::iter::empty()),
+        }
+    }
+
+    pub fn text_repr(&self) -> anyhow::Result<String> {
+        let txt = match self {
+            FetchPostBody::Rich(rich) => serde_json::to_string(&rich.blocks)?,
+            FetchPostBody::Simple(simple) => simple.text.clone(),
+        };
+        Ok(txt)
+    }
+
+    pub fn is_rich(&self) -> bool {
+        matches!(self, FetchPostBody::Rich(_))
+    }
 }
 
 #[derive(Deserialize, Debug)]

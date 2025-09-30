@@ -445,7 +445,8 @@ pub async fn update_fanbox_post(
     let post_id = post.id as i64;
     let creator_id = &post.creator_id;
     let title = &post.title;
-    let body = serde_json::to_string(&detail.body.blocks)?;
+    let body = detail.body.text_repr()?;
+    let is_body_rich = detail.body.is_rich();
     let fee = post.fee_required as i64;
     let published_datetime = post.published_datetime;
     let updated_datetime = post.updated_datetime;
@@ -468,6 +469,7 @@ pub async fn update_fanbox_post(
                 creator_id=?,
                 title=?,
                 body=?,
+                is_body_rich=?,
                 fee=?,
                 published_datetime=datetime(?, 'utc'),
                 updated_datetime=datetime(?, 'utc'),
@@ -477,6 +479,7 @@ pub async fn update_fanbox_post(
             creator_id,
             title,
             body,
+            is_body_rich,
             fee,
             published_datetime,
             updated_datetime,
@@ -493,18 +496,20 @@ pub async fn update_fanbox_post(
                 creator_id,
                 title,
                 body,
+                is_body_rich,
                 fee,
                 published_datetime,
                 updated_datetime,
                 is_adult,
                 fetched_at
             ) VALUES (
-                ?, ?, ?, ?, ?, datetime(?, 'utc'), datetime(?, 'utc'), ?, datetime('now', 'utc')
+                ?, ?, ?, ?, ?, ?, datetime(?, 'utc'), datetime(?, 'utc'), ?, datetime('now', 'utc')
             )"#,
             post_id,
             creator_id,
             title,
             body,
+            is_body_rich,
             fee,
             published_datetime,
             updated_datetime,

@@ -39,16 +39,14 @@ impl Fanbox {
 
             tracing::info!("{} post {} - {}", prompt, id, detail.post.title);
 
-            for (file_id, file) in detail.body.file_map.iter() {
-                assert_eq!(file_id, &file.id);
+            for file in detail.body.files() {
                 let added = crate::db::add_fanbox_file(detail.post.id, file).await?;
                 if added {
                     tracing::info!("| Added file {} - {}", file.id, file.name);
                 }
             }
 
-            for (image_id, image) in detail.body.image_map.iter() {
-                assert_eq!(image_id, &image.id);
+            for image in detail.body.images() {
                 let added = crate::db::add_fanbox_image(detail.post.id, image).await?;
                 if added {
                     tracing::info!("| Added image {}", image.id);

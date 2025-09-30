@@ -3,6 +3,7 @@ CREATE TABLE fanbox_posts (
     creator_id TEXT NOT NULL,
     title TEXT NOT NULL,
     body TEXT NOT NULL,
+    is_body_rich BOOLEAN NOT NULL,
 
     fee INTEGER NOT NULL,
     published_datetime TEXT NOT NULL,

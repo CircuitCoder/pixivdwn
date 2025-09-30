@@ -12,6 +12,10 @@ struct Args {
     /// Can also be set via the PIXIV_COOKIE environment variable
     pixiv_cookie: Option<String>,
 
+    /// Fanbox cookie, not including the "FANBOXSESSID=" prefix
+    /// Can also be set via the FANBOX_COOKIE environment variable
+    fanbox_cookie: Option<String>,
+
     /// Database URL, Can also be set via the DATABASE_URL environment variable
     #[arg(long)]
     database_url: Option<String>,
@@ -33,7 +37,12 @@ async fn main() -> anyhow::Result<()> {
     let pixiv_cookie = args
         .pixiv_cookie
         .or_else(|| std::env::var("PIXIV_COOKIE").ok());
-    let session = config::Session::new(pixiv_cookie, None)?;
+
+    let fanbox_cookie = args
+        .fanbox_cookie
+        .or_else(|| std::env::var("FANBOX_COOKIE").ok());
+
+    let session = config::Session::new(pixiv_cookie, fanbox_cookie)?;
     args.command.run(&session).await?;
 
     Ok(())

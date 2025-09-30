@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize, de::IgnoredAny};
 use serde_repr::Deserialize_repr;
 
 use crate::config::Session;
-use super::Response;
 
 #[derive(Deserialize_repr, sqlx::Type, Debug, Clone, Copy)]
 #[repr(u8)]
@@ -320,6 +319,24 @@ pub struct UgoiraMeta {
     pub mime_type: String,
     pub frames: Vec<UgoiraFrame>,
 }
+
+#[derive(Deserialize)]
+pub struct Response<T> {
+    pub error: bool,
+    pub message: String,
+    pub body: Option<T>,
+}
+
+impl<T> Response<T> {
+    pub fn into_body(self) -> anyhow::Result<T> {
+        if self.error {
+            Err(anyhow::anyhow!("API error: {}", self.message))
+        } else {
+            self.body.ok_or_else(|| anyhow::anyhow!("No body in response"))
+        }
+    }
+}
+
 
 async fn get_bookmarks_page(
     session: &Session,

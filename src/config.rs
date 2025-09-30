@@ -1,9 +1,9 @@
-pub struct PixivSession {
+pub struct UIDSession {
     pub uid: u64,
     pub cookie: String,
 }
 
-impl TryFrom<&str> for PixivSession {
+impl TryFrom<&str> for UIDSession {
     type Error = anyhow::Error;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
@@ -22,9 +22,8 @@ impl TryFrom<&str> for PixivSession {
 }
 
 pub struct Session {
-    pub pixiv: Option<PixivSession>,
-    #[allow(unused)]
-    pub fanbox: Option<String>,
+    pub pixiv: Option<UIDSession>,
+    pub fanbox: Option<UIDSession>,
 }
 
 impl Session {
@@ -32,15 +31,12 @@ impl Session {
         pixiv_cookie: Option<String>,
         fanbox_cookie: Option<String>,
     ) -> anyhow::Result<Self> {
-        let pixiv = if let Some(cookie) = pixiv_cookie {
-            Some(cookie.as_str().try_into()?)
-        } else {
-            None
-        };
+        let pixiv = pixiv_cookie.map(|e| UIDSession::try_from(e.as_str())).transpose()?;
+        let fanbox = fanbox_cookie.map(|e| UIDSession::try_from(e.as_str())).transpose()?;
 
         Ok(Self {
             pixiv,
-            fanbox: fanbox_cookie,
+            fanbox,
         })
     }
 }

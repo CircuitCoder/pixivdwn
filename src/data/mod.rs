@@ -41,20 +41,3 @@ where
 
     deserializer.deserialize_any(StrOrU64)
 }
-
-#[derive(Deserialize)]
-pub struct Response<T> {
-    pub error: bool,
-    pub message: String,
-    pub body: T,
-}
-
-impl<T> Response<T> {
-    pub fn into_body(self) -> anyhow::Result<T> {
-        if self.error {
-            Err(anyhow::anyhow!("API error: {}", self.message))
-        } else {
-            Ok(self.body)
-        }
-    }
-}

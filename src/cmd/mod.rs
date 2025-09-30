@@ -3,6 +3,7 @@ pub mod download;
 pub mod illust;
 pub mod query;
 pub mod database;
+pub mod fanbox;
 
 use clap::Subcommand;
 
@@ -17,6 +18,9 @@ pub enum Command {
     /// Download individual illustration by ID
     Download(download::Download),
 
+    /// Fanbox fetching
+    Fanbox(fanbox::Fanbox),
+
     /// Query local database
     Query(query::Query),
 
@@ -30,6 +34,7 @@ impl Command {
             Command::Bookmarks(cmd) => cmd.run(session).await,
             Command::Illust(cmd) => cmd.run(session).await,
             Command::Download(cmd) => cmd.run(session).await,
+            Command::Fanbox(cmd) => cmd.run(session).await,
             Command::Query(cmd) => cmd.run().await,
             Command::Database(cmd) => cmd.run().await,
         }

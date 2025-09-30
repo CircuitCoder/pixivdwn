@@ -604,3 +604,56 @@ pub async fn add_fanbox_file(
 
     Ok(ret > 0)
 }
+
+pub struct FanboxFileDownloadSpec {
+    pub url: String,
+    pub name: String,
+    pub post_id: String,
+    pub ext: String,
+}
+
+pub async fn query_fanbox_file_dwn(id: &str) -> anyhow::Result<Option<FanboxFileDownloadSpec>> {
+    let db = get_db().await?;
+    let rec = sqlx::query_as!(FanboxFileDownloadSpec, "SELECT url, name, post_id, ext FROM fanbox_files WHERE id = ?", id)
+        .fetch_optional(db)
+        .await?;
+    Ok(rec)
+}
+
+pub struct FanboxImageDownloadSpec {
+    pub url: String,
+    pub post_id: String,
+    pub ext: String,
+}
+
+pub async fn query_fanbox_image_dwn(id: &str) -> anyhow::Result<Option<FanboxImageDownloadSpec>> {
+    let db = get_db().await?;
+    let rec = sqlx::query_as!(FanboxImageDownloadSpec, "SELECT url, post_id, ext FROM fanbox_images WHERE id = ?", id)
+        .fetch_optional(db)
+        .await?;
+    Ok(rec)
+}
+
+pub async fn update_file_download(
+    id: &str,
+    path: &str,
+) -> anyhow::Result<bool> {
+    let db = get_db().await?;
+    let rows_updated = sqlx::query!("UPDATE fanbox_files SET path = ?, downloaded_at = datetime('now', 'utc') WHERE id = ?", path, id)
+        .execute(db)
+        .await?
+        .rows_affected();
+    Ok(rows_updated > 0)
+}
+
+pub async fn update_image_download(
+    id: &str,
+    path: &str,
+) -> anyhow::Result<bool> {
+    let db = get_db().await?;
+    let rows_updated = sqlx::query!("UPDATE fanbox_images SET path = ?, downloaded_at = datetime('now', 'utc') WHERE id = ?", path, id)
+        .execute(db)
+        .await?
+        .rows_affected();
+    Ok(rows_updated > 0)
+}

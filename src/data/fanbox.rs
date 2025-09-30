@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use async_stream::try_stream;
 use serde::{Deserialize, Serialize};
 
-use crate::config::Session;
+use crate::{config::Session, data::{RequestArgumenter, RequestExt}};
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -140,16 +140,14 @@ pub struct FetchPostDetail {
     pub body: FetchPostBody,
 }
 
-trait RequestExt : Sized {
-    fn prepare_with(self, cookie: &Session) -> anyhow::Result<Self>;
-}
+pub struct FanboxRequest<'a>(pub &'a Session);
 
-impl RequestExt for wreq::RequestBuilder {
-    fn prepare_with(self, session: &Session) -> anyhow::Result<Self> {
-        let updated = if let Some(ref full) = session.fanbox_full {
-            self.header("Cookie", full)
-        } else if let Some(ref cookie) = session.fanbox {
-            self.header("Cookie", format!("FANBOXSESSID={};", cookie.cookie))
+impl<'a> RequestArgumenter for FanboxRequest<'a> {
+    fn argument(self, req: wreq::RequestBuilder) -> anyhow::Result<wreq::RequestBuilder> {
+        let updated = if let Some(ref full) = self.0.fanbox_full {
+            req.header("Cookie", full)
+        } else if let Some(ref cookie) = self.0.fanbox {
+            req.header("Cookie", format!("FANBOXSESSID={};", cookie.cookie))
         } else {
             return Err(anyhow::anyhow!("Fanbox session is required"));
         };
@@ -157,7 +155,8 @@ impl RequestExt for wreq::RequestBuilder {
         let updated = updated
             .header("Origin", "https://www.fanbox.cc")
             .header("Referer", "https://www.fanbox.cc/")
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36");
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
+            .emulation(wreq_util::Emulation::Chrome140);
         Ok(updated)
     }
 }
@@ -191,8 +190,7 @@ pub async fn get_author_paginates(session: &Session, author_id: &str) -> anyhow:
 
     let client = wreq::Client::new();
     let req = client.get(&url)
-        .prepare_with(session)?
-        .emulation(wreq_util::Emulation::Chrome140)
+        .prepare_with(FanboxRequest(session))?
         .build()?;
     let resp = client.execute(req).await?;
     let text = resp.text().await?;
@@ -213,7 +211,7 @@ pub fn fetch_author_posts(session: &Session, author_id: &str) -> impl futures::S
 
             let client = wreq::Client::new();
             let req = client.get(&page_url)
-                .prepare_with(session)?
+                .prepare_with(FanboxRequest(session))?
                 .build()?;
             let resp = client.execute(req).await?;
             let posts: Response<Vec<FetchPost>> = resp.json().await?;
@@ -235,8 +233,7 @@ pub async fn fetch_post(session: &Session, post_id: u64) -> anyhow::Result<Fetch
 
     let client = wreq::Client::new();
     let req = client.get(&url)
-        .prepare_with(session)?
-        .emulation(wreq_util::Emulation::Chrome140)
+        .prepare_with(FanboxRequest(session))?
         .build()?;
     let resp = client.execute(req).await?;
     let text = resp.text().await?;

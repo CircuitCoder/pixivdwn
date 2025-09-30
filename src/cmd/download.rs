@@ -3,7 +3,7 @@ use std::{collections::HashSet, io::Read, path::PathBuf};
 use clap::Args;
 use tempfile::NamedTempFile;
 
-use crate::data::pixiv::IllustType;
+use crate::data::pixiv::{IllustType, PixivRequest};
 
 #[derive(clap::ValueEnum, Clone, Copy)]
 enum DatabasePathFormat {
@@ -196,9 +196,8 @@ impl Download {
     ) -> anyhow::Result<(PathBuf, PathBuf)> {
         let mut tmp_file = NamedTempFile::with_prefix_in("pixivdwn_", &self.base_dir)?;
         let mut buffered_file = std::io::BufWriter::new(tmp_file.as_file_mut());
-        crate::image::download(
-            session,
-            crate::image::DownloadSource::Pixiv,
+        crate::data::file::download(
+            PixivRequest(session),
             url,
             &mut buffered_file,
             self.progress,

@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 pub mod pixiv;
 pub mod fanbox;
+pub mod file;
 
 fn de_str_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
 where
@@ -40,4 +41,18 @@ where
     }
 
     deserializer.deserialize_any(StrOrU64)
+}
+
+pub trait RequestArgumenter {
+    fn argument(self, req: wreq::RequestBuilder) -> anyhow::Result<wreq::RequestBuilder>;
+}
+
+pub trait RequestExt : Sized {
+    fn prepare_with<R: RequestArgumenter>(self, arg: R) -> anyhow::Result<Self>;
+}
+
+impl RequestExt for wreq::RequestBuilder {
+    fn prepare_with<R: RequestArgumenter>(self, arg: R) -> anyhow::Result<Self> {
+        arg.argument(self)
+    }
 }

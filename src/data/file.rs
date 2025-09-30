@@ -1,34 +1,19 @@
-use crate::config::Session;
+use crate::{data::{RequestArgumenter, RequestExt}};
 use futures::StreamExt;
 
-pub enum DownloadSource {
-    Pixiv,
-    #[allow(unused)]
-    Fanbox,
-}
-
-pub async fn download<W: std::io::Write>(
-    session: &Session,
-    src: DownloadSource,
+pub async fn download<W: std::io::Write, R: RequestArgumenter>(
+    req_arg: R,
     url: &str,
     mut dst: W,
     show_progress: bool,
 ) -> anyhow::Result<()> {
     let client = wreq::Client::new();
 
-    let mut req = client.get(url)
-        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36");
-    match src {
-        DownloadSource::Pixiv => {
-            req = req.header("Referer", "https://www.pixiv.net/");
-            if let Some(pixiv) = &session.pixiv {
-                req = req.header("Cookie", format!("PHPSESSID={};", pixiv.cookie));
-            }
-        }
-        DownloadSource::Fanbox => unimplemented!(),
-    }
+    let req = client.get(url)
+        .prepare_with(req_arg)?
+        .build()?;
 
-    let resp = req.send().await?;
+    let resp = client.execute(req).await?;
     let status = resp.status();
 
     if !status.is_success() {

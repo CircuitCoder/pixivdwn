@@ -4,7 +4,7 @@ use async_stream::try_stream;
 use serde::{Deserialize, Serialize, de::IgnoredAny};
 use serde_repr::Deserialize_repr;
 
-use crate::config::Session;
+use crate::{config::Session, data::{RequestArgumenter, RequestExt}};
 
 #[derive(Deserialize_repr, sqlx::Type, Debug, Clone, Copy)]
 #[repr(u8)]
@@ -337,6 +337,18 @@ impl<T> Response<T> {
     }
 }
 
+pub struct PixivRequest<'a>(pub &'a Session);
+
+impl RequestArgumenter for PixivRequest<'_> {
+    fn argument(self, req: wreq::RequestBuilder) -> anyhow::Result<wreq::RequestBuilder> {
+        let pixiv_session = self.0.pixiv.as_ref().ok_or_else(|| {
+            anyhow::anyhow!("Pixiv session is required")
+        })?;
+        Ok(req
+            .header("Cookie", format!("PHPSESSID={};", pixiv_session.cookie))
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"))
+    }
+}
 
 async fn get_bookmarks_page(
     session: &Session,
@@ -357,8 +369,7 @@ async fn get_bookmarks_page(
 
     let client = wreq::Client::new();
     let req = client.get(&url)
-        .header("Cookie", format!("PHPSESSID={};", pixiv_session.cookie))
-        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
+        .prepare_with(PixivRequest(session))?
         .query(&[
             ("tag", tag.unwrap_or("")),
             ("offset", offset.to_string().as_str()),
@@ -498,19 +509,11 @@ pub async fn get_bookmarks(
 }
 
 pub async fn get_illust(session: &Session, illust_id: u64) -> anyhow::Result<Illust> {
-    let pixiv_session = session
-        .pixiv
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("Pixiv session is required"))?;
     let url = format!("https://www.pixiv.net/ajax/illust/{}", illust_id);
 
     let client = wreq::Client::new();
     let req = client.get(&url)
-        .header("Cookie", format!("PHPSESSID={};", pixiv_session.cookie))
-        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
-        .query(&[
-            ("lang", "en"),
-        ])
+        .prepare_with(PixivRequest(session))?
         .build()?;
     let resp = client.execute(req).await?;
     let json: Response<FetchWorkDetail> = resp.json().await?;
@@ -519,19 +522,11 @@ pub async fn get_illust(session: &Session, illust_id: u64) -> anyhow::Result<Ill
 }
 
 pub async fn get_illust_pages(session: &Session, illust_id: u64) -> anyhow::Result<Vec<Page>> {
-    let pixiv_session = session
-        .pixiv
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("Pixiv session is required"))?;
     let url = format!("https://www.pixiv.net/ajax/illust/{}/pages", illust_id);
 
     let client = wreq::Client::new();
     let req = client.get(&url)
-        .header("Cookie", format!("PHPSESSID={};", pixiv_session.cookie))
-        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
-        .query(&[
-            ("lang", "en"),
-        ])
+        .prepare_with(PixivRequest(session))?
         .build()?;
     let resp = client.execute(req).await?;
     let json: Response<Vec<Page>> = resp.json().await?;
@@ -543,10 +538,6 @@ pub async fn get_illust_ugoira_meta(
     session: &Session,
     illust_id: u64,
 ) -> anyhow::Result<UgoiraMeta> {
-    let pixiv_session = session
-        .pixiv
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("Pixiv session is required"))?;
     let url = format!(
         "https://www.pixiv.net/ajax/illust/{}/ugoira_meta",
         illust_id
@@ -554,11 +545,7 @@ pub async fn get_illust_ugoira_meta(
 
     let client = wreq::Client::new();
     let req = client.get(&url)
-        .header("Cookie", format!("PHPSESSID={};", pixiv_session.cookie))
-        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
-        .query(&[
-            ("lang", "en"),
-        ])
+        .prepare_with(PixivRequest(session))?
         .build()?;
     let resp = client.execute(req).await?;
     let json: Response<UgoiraMeta> = resp.json().await?;

@@ -18,6 +18,7 @@ serde_json = "1.0.145"
 serde_repr = "0.1.20"
 sqlx = { version = "0.8.6", default-features = false, features = ["sqlite-unbundled", "macros", "derive", "runtime-tokio", "chrono", "migrate"] }
 tempfile = "3.22.0"
+thiserror = "2.0.17"
 tokio = { version = "1.47.1", features = ["macros", "rt", "rt-multi-thread", "time"] }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.20"

@@ -90,7 +90,7 @@ pub struct FetchPostBodyRichRaw {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(from = "FetchPostBodyRichRaw")]
+#[serde(try_from = "FetchPostBodyRichRaw")]
 pub struct FetchPostBodyRich {
     pub blocks: Vec<FetchPostBlock>,
     pub images: Vec<(usize, FetchPostImage)>,
@@ -99,39 +99,62 @@ pub struct FetchPostBodyRich {
     pub url_embeds: Vec<(usize, serde_json::Value)>,
 }
 
-// FIXME: move to try_from
-impl From<FetchPostBodyRichRaw> for FetchPostBodyRich {
-    fn from(mut raw: FetchPostBodyRichRaw) -> Self {
+#[derive(thiserror::Error, Debug)]
+pub enum FetchPostBodyConversionError {
+    #[error("Unmatched image ID: {0}")]
+    UnmatchedImageId(String),
+    #[error("Unmatched file ID: {0}")]
+    UnmatchedFileId(String),
+    #[error("Extra unmapped items exist: image: {image:?} file: {file:?} embed: {embed:?} url_embed: {url_embed:?}")]
+    Extra {
+        image: bool,
+        file: bool,
+        embed: bool,
+        url_embed: bool,
+    },
+}
+
+impl TryFrom<FetchPostBodyRichRaw> for FetchPostBodyRich {
+    type Error = FetchPostBodyConversionError;
+
+    fn try_from(mut raw: FetchPostBodyRichRaw) -> Result<Self, Self::Error> {
         let mut images = Vec::new();
         let mut files = Vec::new();
-
-        assert!(raw.embed_map.len() == 0);
-        assert!(raw.url_embed_map.len() == 0);
 
         for (idx, block) in raw.blocks.iter().enumerate() {
             match block {
                 FetchPostBlock::Image { image_id } => {
-                    let inner = raw.image_map.remove(image_id).unwrap();
+                    let inner = raw.image_map.remove(image_id).ok_or_else(|| FetchPostBodyConversionError::UnmatchedImageId(image_id.clone()))?;
                     images.push((idx, inner));
                 }
                 FetchPostBlock::File { file_id } => {
-                    let inner = raw.file_map.remove(file_id).unwrap();
+                    let inner = raw.file_map.remove(file_id).ok_or_else(|| FetchPostBodyConversionError::UnmatchedFileId(file_id.clone()))?;
                     files.push((idx, inner));
                 }
                 _ => {}
             }
         }
 
-        assert!(raw.image_map.len() == 0);
-        assert!(raw.file_map.len() == 0);
+        let extra_embed = raw.embed_map.len() == 0;
+        let extra_url_embed = raw.url_embed_map.len() == 0;
+        let extra_image = raw.image_map.len() == 0;
+        let extra_file = raw.file_map.len() == 0;
+        if extra_embed || extra_url_embed || extra_image || extra_file {
+            return Err(FetchPostBodyConversionError::Extra {
+                embed: !extra_embed,
+                url_embed: !extra_url_embed,
+                image: !extra_image,
+                file: !extra_file,
+            });
+        }
 
-        Self {
+        Ok(Self {
             blocks: raw.blocks,
             images,
             files,
             embeds: Vec::new(),
             url_embeds: Vec::new(),
-        }
+        })
     }
 }
 

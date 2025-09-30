@@ -4,7 +4,10 @@ use async_stream::try_stream;
 use serde::{Deserialize, Serialize, de::IgnoredAny};
 use serde_repr::Deserialize_repr;
 
-use crate::{config::Session, data::{RequestArgumenter, RequestExt}};
+use crate::{
+    config::Session,
+    data::{RequestArgumenter, RequestExt},
+};
 
 #[derive(Deserialize_repr, sqlx::Type, Debug, Clone, Copy)]
 #[repr(u8)]
@@ -332,7 +335,8 @@ impl<T> Response<T> {
         if self.error {
             Err(anyhow::anyhow!("API error: {}", self.message))
         } else {
-            self.body.ok_or_else(|| anyhow::anyhow!("No body in response"))
+            self.body
+                .ok_or_else(|| anyhow::anyhow!("No body in response"))
         }
     }
 }
@@ -341,9 +345,11 @@ pub struct PixivRequest<'a>(pub &'a Session);
 
 impl RequestArgumenter for PixivRequest<'_> {
     fn argument(self, req: wreq::RequestBuilder) -> anyhow::Result<wreq::RequestBuilder> {
-        let pixiv_session = self.0.pixiv.as_ref().ok_or_else(|| {
-            anyhow::anyhow!("Pixiv session is required")
-        })?;
+        let pixiv_session = self
+            .0
+            .pixiv
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Pixiv session is required"))?;
         Ok(req
             .header("Cookie", format!("PHPSESSID={};", pixiv_session.cookie))
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"))
@@ -368,7 +374,8 @@ async fn get_bookmarks_page(
     );
 
     let client = wreq::Client::new();
-    let req = client.get(&url)
+    let req = client
+        .get(&url)
         .prepare_with(PixivRequest(session))?
         .query(&[
             ("tag", tag.unwrap_or("")),
@@ -512,7 +519,8 @@ pub async fn get_illust(session: &Session, illust_id: u64) -> anyhow::Result<Ill
     let url = format!("https://www.pixiv.net/ajax/illust/{}", illust_id);
 
     let client = wreq::Client::new();
-    let req = client.get(&url)
+    let req = client
+        .get(&url)
         .prepare_with(PixivRequest(session))?
         .build()?;
     let resp = client.execute(req).await?;
@@ -525,7 +533,8 @@ pub async fn get_illust_pages(session: &Session, illust_id: u64) -> anyhow::Resu
     let url = format!("https://www.pixiv.net/ajax/illust/{}/pages", illust_id);
 
     let client = wreq::Client::new();
-    let req = client.get(&url)
+    let req = client
+        .get(&url)
         .prepare_with(PixivRequest(session))?
         .build()?;
     let resp = client.execute(req).await?;
@@ -544,7 +553,8 @@ pub async fn get_illust_ugoira_meta(
     );
 
     let client = wreq::Client::new();
-    let req = client.get(&url)
+    let req = client
+        .get(&url)
         .prepare_with(PixivRequest(session))?
         .build()?;
     let resp = client.execute(req).await?;

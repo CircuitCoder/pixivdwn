@@ -1,4 +1,4 @@
-use crate::{data::{RequestArgumenter, RequestExt}};
+use crate::data::{RequestArgumenter, RequestExt};
 use futures::StreamExt;
 
 pub async fn download<W: std::io::Write, R: RequestArgumenter>(
@@ -9,9 +9,7 @@ pub async fn download<W: std::io::Write, R: RequestArgumenter>(
 ) -> anyhow::Result<()> {
     let client = wreq::Client::new();
 
-    let req = client.get(url)
-        .prepare_with(req_arg)?
-        .build()?;
+    let req = client.get(url).prepare_with(req_arg)?.build()?;
 
     let resp = client.execute(req).await?;
     let status = resp.status();
@@ -27,7 +25,6 @@ pub async fn download<W: std::io::Write, R: RequestArgumenter>(
         let bar = if let Some(size) = size {
             indicatif::ProgressBar::new(size)
         } else {
-
             indicatif::ProgressBar::new_spinner()
         };
         bar.set_style(indicatif::ProgressStyle::with_template(

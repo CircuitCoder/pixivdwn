@@ -37,9 +37,13 @@ pub struct Bookmarks {
 
 impl Bookmarks {
     pub async fn run(self, session: &crate::config::Session) -> anyhow::Result<()> {
-        let bookmarks =
-            crate::data::pixiv::get_bookmarks(&session, self.tag.as_deref(), self.offset, self.private)
-                .await;
+        let bookmarks = crate::data::pixiv::get_bookmarks(
+            &session,
+            self.tag.as_deref(),
+            self.offset,
+            self.private,
+        )
+        .await;
         pin_mut!(bookmarks);
         let mut tag_map_ctx: HashMap<String, u64> = HashMap::new();
         let mut cnt = 0;

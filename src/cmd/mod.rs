@@ -1,9 +1,9 @@
 pub mod bookmarks;
+pub mod database;
 pub mod download;
+pub mod fanbox;
 pub mod illust;
 pub mod query;
-pub mod database;
-pub mod fanbox;
 
 use clap::Subcommand;
 

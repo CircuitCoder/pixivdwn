@@ -33,8 +33,12 @@ impl Session {
         fanbox_cookie: Option<String>,
         fanbox_full: Option<String>,
     ) -> anyhow::Result<Self> {
-        let pixiv = pixiv_cookie.map(|e| UIDSession::try_from(e.as_str())).transpose()?;
-        let fanbox = fanbox_cookie.map(|e| UIDSession::try_from(e.as_str())).transpose()?;
+        let pixiv = pixiv_cookie
+            .map(|e| UIDSession::try_from(e.as_str()))
+            .transpose()?;
+        let fanbox = fanbox_cookie
+            .map(|e| UIDSession::try_from(e.as_str()))
+            .transpose()?;
 
         Ok(Self {
             pixiv,

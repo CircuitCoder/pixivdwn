@@ -43,7 +43,9 @@ async fn main() -> anyhow::Result<()> {
         .fanbox_cookie
         .or_else(|| std::env::var("FANBOX_COOKIE").ok());
 
-    let fanbox_cookie_full = args.fanbox_cookie_full.or_else(|| std::env::var("FANBOX_COOKIE_FULL").ok());
+    let fanbox_cookie_full = args
+        .fanbox_cookie_full
+        .or_else(|| std::env::var("FANBOX_COOKIE_FULL").ok());
 
     let session = config::Session::new(pixiv_cookie, fanbox_cookie, fanbox_cookie_full)?;
     args.command.run(&session).await?;

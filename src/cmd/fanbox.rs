@@ -41,15 +41,21 @@ impl Fanbox {
                 sync_creator(session, &creator).await?;
             }
             FanboxCmd::DownloadFile { id } => {
-                let spec = crate::db::query_fanbox_file_dwn(&id).await?.ok_or_else(|| {
-                    anyhow::anyhow!("File {} not found in database", id)
-                })?;
-                let filename = format!("{}_{}_{}_{}.{}", spec.post_id, spec.idx, id, spec.name, spec.ext);
+                let spec = crate::db::query_fanbox_file_dwn(&id)
+                    .await?
+                    .ok_or_else(|| anyhow::anyhow!("File {} not found in database", id))?;
+                let filename = format!(
+                    "{}_{}_{}_{}.{}",
+                    spec.post_id, spec.idx, id, spec.name, spec.ext
+                );
                 // Let's get a quick hack
                 let final_path = std::path::Path::new(&self.base_dir).join(&filename);
                 tracing::info!("Downloading file {} to {}", id, final_path.display());
                 if final_path.exists() {
-                    return Err(anyhow::anyhow!("File already exists: {}", final_path.display()));
+                    return Err(anyhow::anyhow!(
+                        "File already exists: {}",
+                        final_path.display()
+                    ));
                 }
 
                 crate::data::file::download(
@@ -57,21 +63,26 @@ impl Fanbox {
                     &spec.url,
                     std::io::BufWriter::new(std::fs::File::create(&final_path)?),
                     true,
-                ).await?;
+                )
+                .await?;
 
-                let updated = crate::db::update_file_download(&id, final_path.to_str().unwrap()).await?;
+                let updated =
+                    crate::db::update_file_download(&id, final_path.to_str().unwrap()).await?;
                 assert!(updated, "File {} should exist in database", id);
             }
             FanboxCmd::DownloadImage { id } => {
-                let spec = crate::db::query_fanbox_image_dwn(&id).await?.ok_or_else(|| {
-                    anyhow::anyhow!("Image {} not found in database", id)
-                })?;
+                let spec = crate::db::query_fanbox_image_dwn(&id)
+                    .await?
+                    .ok_or_else(|| anyhow::anyhow!("Image {} not found in database", id))?;
                 let filename = format!("{}_{}_{}.{}", spec.post_id, spec.idx, id, spec.ext);
 
                 let final_path = std::path::Path::new(&self.base_dir).join(&filename);
                 tracing::info!("Downloading image {} to {}", id, final_path.display());
                 if final_path.exists() {
-                    return Err(anyhow::anyhow!("File already exists: {}", final_path.display()));
+                    return Err(anyhow::anyhow!(
+                        "File already exists: {}",
+                        final_path.display()
+                    ));
                 }
 
                 crate::data::file::download(
@@ -79,15 +90,16 @@ impl Fanbox {
                     &spec.url,
                     std::io::BufWriter::new(std::fs::File::create(&final_path)?),
                     true,
-                ).await?;
+                )
+                .await?;
 
-                let updated = crate::db::update_image_download(&id, final_path.to_str().unwrap()).await?;
+                let updated =
+                    crate::db::update_image_download(&id, final_path.to_str().unwrap()).await?;
                 assert!(updated, "Image {} should exist in database", id);
             }
         }
         Ok(())
     }
-
 }
 
 async fn sync_creator(session: &crate::config::Session, creator: &str) -> anyhow::Result<()> {
@@ -97,16 +109,29 @@ async fn sync_creator(session: &crate::config::Session, creator: &str) -> anyhow
     let mut posts = Box::pin(crate::data::fanbox::fetch_author_posts(session, creator));
     while let Some(post) = posts.next().await.transpose()? {
         let last_updated = crate::db::query_fanbox_post_updated_datetime(post.id).await?;
-        if let Some(last_updated) = last_updated && last_updated >= post.updated_datetime {
+        if let Some(last_updated) = last_updated
+            && last_updated >= post.updated_datetime
+        {
             if last_updated > post.updated_datetime {
-                tracing::warn!("Post {} updated_datetime went backwards: was {}, now {}", post.id, last_updated, post.updated_datetime);
+                tracing::warn!(
+                    "Post {} updated_datetime went backwards: was {}, now {}",
+                    post.id,
+                    last_updated,
+                    post.updated_datetime
+                );
             } else {
-                tracing::info!("Post {} not updated since last fetch at {}, skipping", post.id, last_updated);
+                tracing::info!(
+                    "Post {} not updated since last fetch at {}, skipping",
+                    post.id,
+                    last_updated
+                );
             }
             continue;
         }
 
-        let delay = std::time::Duration::from_millis((DELAY_MS + rand::random_range(-DELAY_RANDOM_VAR_MS..=DELAY_RANDOM_VAR_MS)) as u64);
+        let delay = std::time::Duration::from_millis(
+            (DELAY_MS + rand::random_range(-DELAY_RANDOM_VAR_MS..=DELAY_RANDOM_VAR_MS)) as u64,
+        );
         let id = post.id;
         tokio::time::sleep(delay).await;
 

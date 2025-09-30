@@ -3,10 +3,14 @@ use std::collections::HashMap;
 use async_stream::try_stream;
 use serde::{Deserialize, Serialize};
 
-use crate::{config::Session, data::{RequestArgumenter, RequestExt}};
+use crate::{
+    config::Session,
+    data::{RequestArgumenter, RequestExt},
+};
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[allow(unused)]
 pub struct LinkedPixivUser {
     #[serde(deserialize_with = "super::de_str_to_u64")]
     user_id: u64,
@@ -15,6 +19,7 @@ pub struct LinkedPixivUser {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[allow(unused)]
 pub struct FetchPostCover {
     r#type: String,
     url: String,
@@ -22,6 +27,7 @@ pub struct FetchPostCover {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[allow(unused)]
 pub struct FetchPost {
     #[serde(deserialize_with = "super::de_str_to_u64")]
     pub id: u64,
@@ -66,6 +72,7 @@ pub struct FetchPostImage {
     pub width: u64,
     pub height: u64,
     pub original_url: String,
+    #[allow(unused)]
     pub thumbnail_url: String,
 }
 
@@ -95,7 +102,10 @@ pub struct FetchPostBodyRich {
     pub blocks: Vec<FetchPostBlock>,
     pub images: Vec<(usize, FetchPostImage)>,
     pub files: Vec<(usize, FetchPostFile)>,
+
+    #[allow(unused)]
     pub embeds: Vec<(usize, serde_json::Value)>,
+    #[allow(unused)]
     pub url_embeds: Vec<(usize, serde_json::Value)>,
 }
 
@@ -105,7 +115,9 @@ pub enum FetchPostBodyConversionError {
     UnmatchedImageId(String),
     #[error("Unmatched file ID: {0}")]
     UnmatchedFileId(String),
-    #[error("Extra unmapped items exist: image: {image:?} file: {file:?} embed: {embed:?} url_embed: {url_embed:?}")]
+    #[error(
+        "Extra unmapped items exist: image: {image:?} file: {file:?} embed: {embed:?} url_embed: {url_embed:?}"
+    )]
     Extra {
         image: bool,
         file: bool,
@@ -124,11 +136,15 @@ impl TryFrom<FetchPostBodyRichRaw> for FetchPostBodyRich {
         for (idx, block) in raw.blocks.iter().enumerate() {
             match block {
                 FetchPostBlock::Image { image_id } => {
-                    let inner = raw.image_map.remove(image_id).ok_or_else(|| FetchPostBodyConversionError::UnmatchedImageId(image_id.clone()))?;
+                    let inner = raw.image_map.remove(image_id).ok_or_else(|| {
+                        FetchPostBodyConversionError::UnmatchedImageId(image_id.clone())
+                    })?;
                     images.push((idx, inner));
                 }
                 FetchPostBlock::File { file_id } => {
-                    let inner = raw.file_map.remove(file_id).ok_or_else(|| FetchPostBodyConversionError::UnmatchedFileId(file_id.clone()))?;
+                    let inner = raw.file_map.remove(file_id).ok_or_else(|| {
+                        FetchPostBodyConversionError::UnmatchedFileId(file_id.clone())
+                    })?;
                     files.push((idx, inner));
                 }
                 _ => {}
@@ -185,10 +201,18 @@ impl FetchPostBody {
 
     pub fn files<'a>(&'a self) -> Box<dyn Iterator<Item = (usize, &'a FetchPostFile)> + 'a> {
         match self {
-            FetchPostBody::Rich(rich) => Box::new(rich.files.iter().map(|(idx, file)| (*idx, file))),
+            FetchPostBody::Rich(rich) => {
+                Box::new(rich.files.iter().map(|(idx, file)| (*idx, file)))
+            }
             FetchPostBody::Simple(simple) => {
                 let img_len = simple.images.len();
-                Box::new(simple.files.iter().enumerate().map(move |(i, file)| (i + img_len, file)))
+                Box::new(
+                    simple
+                        .files
+                        .iter()
+                        .enumerate()
+                        .map(move |(i, file)| (i + img_len, file)),
+                )
             }
         }
     }
@@ -238,12 +262,8 @@ impl<'a> RequestArgumenter for FanboxRequest<'a> {
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum Response<T> {
-    Errored {
-        error: String,
-    },
-    Success {
-        body: T,
-    }
+    Errored { error: String },
+    Success { body: T },
 }
 
 impl<T> Response<T> {
@@ -255,15 +275,18 @@ impl<T> Response<T> {
     }
 }
 
-
-pub async fn get_author_paginates(session: &Session, author_id: &str) -> anyhow::Result<Vec<String>> {
+pub async fn get_author_paginates(
+    session: &Session,
+    author_id: &str,
+) -> anyhow::Result<Vec<String>> {
     let url = format!(
         "https://api.fanbox.cc/post.paginateCreator?creatorId={}&sort=newest",
-       author_id 
+        author_id
     );
 
     let client = wreq::Client::new();
-    let req = client.get(&url)
+    let req = client
+        .get(&url)
         .prepare_with(FanboxRequest(session))?
         .build()?;
     let resp = client.execute(req).await?;
@@ -273,7 +296,10 @@ pub async fn get_author_paginates(session: &Session, author_id: &str) -> anyhow:
     json.into_body()
 }
 
-pub fn fetch_author_posts(session: &Session, author_id: &str) -> impl futures::Stream<Item = anyhow::Result<FetchPost>> {
+pub fn fetch_author_posts(
+    session: &Session,
+    author_id: &str,
+) -> impl futures::Stream<Item = anyhow::Result<FetchPost>> {
     const DELAY_MS: i64 = 2500;
     const DELAY_RANDOM_VAR_MS: i64 = 500;
 
@@ -300,13 +326,11 @@ pub fn fetch_author_posts(session: &Session, author_id: &str) -> impl futures::S
 }
 
 pub async fn fetch_post(session: &Session, post_id: u64) -> anyhow::Result<FetchPostDetail> {
-    let url = format!(
-        "https://api.fanbox.cc/post.info?postId={}",
-       post_id 
-    );
+    let url = format!("https://api.fanbox.cc/post.info?postId={}", post_id);
 
     let client = wreq::Client::new();
-    let req = client.get(&url)
+    let req = client
+        .get(&url)
         .prepare_with(FanboxRequest(session))?
         .build()?;
     let resp = client.execute(req).await?;

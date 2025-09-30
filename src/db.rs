@@ -1,7 +1,11 @@
 use std::collections::HashMap;
 
 use serde::Serialize;
-use sqlx::{migrate::Migrator, sqlite::{SqliteConnectOptions, SqliteRow}, SqlitePool};
+use sqlx::{
+    SqlitePool,
+    migrate::Migrator,
+    sqlite::{SqliteConnectOptions, SqliteRow},
+};
 use tokio::sync::OnceCell;
 
 use crate::data::pixiv::{IllustBookmarkTags, IllustState, UgoiraFrame};
@@ -26,7 +30,9 @@ impl<I: Iterator<Item = u64> + Clone> Serialize for TagIterator<I> {
 async fn get_db() -> anyhow::Result<&'static sqlx::SqlitePool> {
     let db = DB
         .get_or_try_init::<anyhow::Error, _, _>(|| async {
-            let url = DBURL.get().ok_or_else(|| anyhow::anyhow!("Database URL not set"))?;
+            let url = DBURL
+                .get()
+                .ok_or_else(|| anyhow::anyhow!("Database URL not set"))?;
             let db = SqlitePool::connect(&url).await?;
             Ok(db)
         })
@@ -38,7 +44,9 @@ async fn get_db() -> anyhow::Result<&'static sqlx::SqlitePool> {
 pub async fn setup_db() -> anyhow::Result<()> {
     let db = DB
         .get_or_try_init::<anyhow::Error, _, _>(|| async {
-            let url = DBURL.get().ok_or_else(|| anyhow::anyhow!("Database URL not set"))?;
+            let url = DBURL
+                .get()
+                .ok_or_else(|| anyhow::anyhow!("Database URL not set"))?;
             let opts: SqliteConnectOptions = url.parse()?;
             let opts = opts.create_if_missing(true);
             let db = SqlitePool::connect_with(opts).await?;
@@ -399,7 +407,9 @@ pub async fn update_image(
     Ok(())
 }
 
-pub async fn get_illust_type(illust_id: u64) -> anyhow::Result<Option<crate::data::pixiv::IllustType>> {
+pub async fn get_illust_type(
+    illust_id: u64,
+) -> anyhow::Result<Option<crate::data::pixiv::IllustType>> {
     let db = get_db().await?;
     let illust_id = illust_id as i64;
     let rec = sqlx::query!(
@@ -460,7 +470,12 @@ pub async fn update_fanbox_post(
         if orig.updated_datetime == updated_datetime {
             return Ok(FanboxPostUpdateResult::Skipped);
         } else if orig.updated_datetime > updated_datetime {
-            tracing::warn!("Post {} updated_datetime went backwards: was {}, now {}", post_id, orig.updated_datetime, updated_datetime);
+            tracing::warn!(
+                "Post {} updated_datetime went backwards: was {}, now {}",
+                post_id,
+                orig.updated_datetime,
+                updated_datetime
+            );
             return Ok(FanboxPostUpdateResult::Skipped);
         }
 
@@ -521,7 +536,9 @@ pub async fn update_fanbox_post(
     }
 }
 
-pub async fn query_fanbox_post_updated_datetime(post_id: u64) -> anyhow::Result<Option<chrono::DateTime<chrono::Utc>>> {
+pub async fn query_fanbox_post_updated_datetime(
+    post_id: u64,
+) -> anyhow::Result<Option<chrono::DateTime<chrono::Utc>>> {
     let db = get_db().await?;
     let post_id = post_id as i64;
     let rec = sqlx::query!(r#"SELECT updated_datetime as "updated_datetime: chrono::DateTime<chrono::Utc>" FROM fanbox_posts WHERE id = ?"#, post_id)
@@ -623,9 +640,13 @@ pub struct FanboxFileDownloadSpec {
 
 pub async fn query_fanbox_file_dwn(id: &str) -> anyhow::Result<Option<FanboxFileDownloadSpec>> {
     let db = get_db().await?;
-    let rec = sqlx::query_as!(FanboxFileDownloadSpec, "SELECT url, name, post_id, ext, idx FROM fanbox_files WHERE id = ?", id)
-        .fetch_optional(db)
-        .await?;
+    let rec = sqlx::query_as!(
+        FanboxFileDownloadSpec,
+        "SELECT url, name, post_id, ext, idx FROM fanbox_files WHERE id = ?",
+        id
+    )
+    .fetch_optional(db)
+    .await?;
     Ok(rec)
 }
 
@@ -638,32 +659,38 @@ pub struct FanboxImageDownloadSpec {
 
 pub async fn query_fanbox_image_dwn(id: &str) -> anyhow::Result<Option<FanboxImageDownloadSpec>> {
     let db = get_db().await?;
-    let rec = sqlx::query_as!(FanboxImageDownloadSpec, "SELECT url, post_id, ext, idx FROM fanbox_images WHERE id = ?", id)
-        .fetch_optional(db)
-        .await?;
+    let rec = sqlx::query_as!(
+        FanboxImageDownloadSpec,
+        "SELECT url, post_id, ext, idx FROM fanbox_images WHERE id = ?",
+        id
+    )
+    .fetch_optional(db)
+    .await?;
     Ok(rec)
 }
 
-pub async fn update_file_download(
-    id: &str,
-    path: &str,
-) -> anyhow::Result<bool> {
+pub async fn update_file_download(id: &str, path: &str) -> anyhow::Result<bool> {
     let db = get_db().await?;
-    let rows_updated = sqlx::query!("UPDATE fanbox_files SET path = ?, downloaded_at = datetime('now', 'utc') WHERE id = ?", path, id)
-        .execute(db)
-        .await?
-        .rows_affected();
+    let rows_updated = sqlx::query!(
+        "UPDATE fanbox_files SET path = ?, downloaded_at = datetime('now', 'utc') WHERE id = ?",
+        path,
+        id
+    )
+    .execute(db)
+    .await?
+    .rows_affected();
     Ok(rows_updated > 0)
 }
 
-pub async fn update_image_download(
-    id: &str,
-    path: &str,
-) -> anyhow::Result<bool> {
+pub async fn update_image_download(id: &str, path: &str) -> anyhow::Result<bool> {
     let db = get_db().await?;
-    let rows_updated = sqlx::query!("UPDATE fanbox_images SET path = ?, downloaded_at = datetime('now', 'utc') WHERE id = ?", path, id)
-        .execute(db)
-        .await?
-        .rows_affected();
+    let rows_updated = sqlx::query!(
+        "UPDATE fanbox_images SET path = ?, downloaded_at = datetime('now', 'utc') WHERE id = ?",
+        path,
+        id
+    )
+    .execute(db)
+    .await?
+    .rows_affected();
     Ok(rows_updated > 0)
 }

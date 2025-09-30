@@ -1,8 +1,8 @@
 use serde::Deserialize;
 
-pub mod pixiv;
 pub mod fanbox;
 pub mod file;
+pub mod pixiv;
 
 fn de_str_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
 where
@@ -47,7 +47,7 @@ pub trait RequestArgumenter {
     fn argument(self, req: wreq::RequestBuilder) -> anyhow::Result<wreq::RequestBuilder>;
 }
 
-pub trait RequestExt : Sized {
+pub trait RequestExt: Sized {
     fn prepare_with<R: RequestArgumenter>(self, arg: R) -> anyhow::Result<Self>;
 }
 

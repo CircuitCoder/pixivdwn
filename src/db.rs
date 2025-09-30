@@ -31,7 +31,7 @@ async fn get_db() -> anyhow::Result<&'static sqlx::SqlitePool> {
             Ok(db)
         })
         .await?;
-
+    MIGRATOR.run(db).await?;
     Ok(db)
 }
 

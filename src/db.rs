@@ -618,11 +618,12 @@ pub struct FanboxFileDownloadSpec {
     pub name: String,
     pub post_id: String,
     pub ext: String,
+    pub idx: i64,
 }
 
 pub async fn query_fanbox_file_dwn(id: &str) -> anyhow::Result<Option<FanboxFileDownloadSpec>> {
     let db = get_db().await?;
-    let rec = sqlx::query_as!(FanboxFileDownloadSpec, "SELECT url, name, post_id, ext FROM fanbox_files WHERE id = ?", id)
+    let rec = sqlx::query_as!(FanboxFileDownloadSpec, "SELECT url, name, post_id, ext, idx FROM fanbox_files WHERE id = ?", id)
         .fetch_optional(db)
         .await?;
     Ok(rec)
@@ -632,11 +633,12 @@ pub struct FanboxImageDownloadSpec {
     pub url: String,
     pub post_id: String,
     pub ext: String,
+    pub idx: i64,
 }
 
 pub async fn query_fanbox_image_dwn(id: &str) -> anyhow::Result<Option<FanboxImageDownloadSpec>> {
     let db = get_db().await?;
-    let rec = sqlx::query_as!(FanboxImageDownloadSpec, "SELECT url, post_id, ext FROM fanbox_images WHERE id = ?", id)
+    let rec = sqlx::query_as!(FanboxImageDownloadSpec, "SELECT url, post_id, ext, idx FROM fanbox_images WHERE id = ?", id)
         .fetch_optional(db)
         .await?;
     Ok(rec)

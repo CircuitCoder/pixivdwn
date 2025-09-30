@@ -10,7 +10,7 @@ pub struct Fanbox {
 
     /// Base directory to save the files
     ///
-    /// The illustrations will be saved as `<base_dir>/<post_id>_<image_id>[_<name>].<ext>`
+    /// The illustrations will be saved as `<base_dir>/<post_id>_<idx>_<image_id>[_<name>].<ext>`
     #[arg(short, long, default_value = "fanbox")]
     base_dir: String,
 }
@@ -44,7 +44,7 @@ impl Fanbox {
                 let spec = crate::db::query_fanbox_file_dwn(&id).await?.ok_or_else(|| {
                     anyhow::anyhow!("File {} not found in database", id)
                 })?;
-                let filename = format!("{}_{}_{}.{}", spec.post_id, id, spec.name, spec.ext);
+                let filename = format!("{}_{}_{}_{}.{}", spec.post_id, spec.idx, id, spec.name, spec.ext);
                 // Let's get a quick hack
                 let final_path = std::path::Path::new(&self.base_dir).join(&filename);
                 tracing::info!("Downloading file {} to {}", id, final_path.display());
@@ -66,7 +66,7 @@ impl Fanbox {
                 let spec = crate::db::query_fanbox_image_dwn(&id).await?.ok_or_else(|| {
                     anyhow::anyhow!("Image {} not found in database", id)
                 })?;
-                let filename = format!("{}_{}.{}", spec.post_id, id, spec.ext);
+                let filename = format!("{}_{}_{}.{}", spec.post_id, spec.idx, id, spec.ext);
 
                 let final_path = std::path::Path::new(&self.base_dir).join(&filename);
                 tracing::info!("Downloading image {} to {}", id, final_path.display());

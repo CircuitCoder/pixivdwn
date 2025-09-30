@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use async_stream::try_stream;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::config::Session;
 
@@ -45,7 +45,7 @@ pub struct FetchPost {
     pub is_pinned: bool,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum FetchPostBlock {
     #[serde(rename = "p")]

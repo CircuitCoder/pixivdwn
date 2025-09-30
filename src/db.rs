@@ -428,3 +428,174 @@ pub async fn query_raw(sql: &str) -> anyhow::Result<Vec<SqliteRow>> {
     let result = sqlx::query(sql).fetch_all(db).await?;
     Ok(result)
 }
+
+#[derive(PartialEq, Eq)]
+pub enum FanboxPostUpdateResult {
+    Inserted,
+    Updated,
+    Skipped,
+}
+
+pub async fn update_fanbox_post(
+    detail: &crate::data::fanbox::FetchPostDetail,
+) -> anyhow::Result<FanboxPostUpdateResult> {
+    let post = &detail.post;
+
+    let db = get_db().await?;
+    let post_id = post.id as i64;
+    let creator_id = &post.creator_id;
+    let title = &post.title;
+    let body = serde_json::to_string(&detail.body.blocks)?;
+    let fee = post.fee_required as i64;
+    let published_datetime = post.published_datetime;
+    let updated_datetime = post.updated_datetime;
+    let is_adult = post.has_adult_content;
+
+    let orig = sqlx::query!(r#"SELECT id, updated_datetime as "updated_datetime: chrono::DateTime<chrono::Utc>" FROM fanbox_posts WHERE id = ?"#, post_id)
+        .fetch_optional(db)
+        .await?;
+
+    if let Some(orig) = orig {
+        if orig.updated_datetime == updated_datetime {
+            return Ok(FanboxPostUpdateResult::Skipped);
+        } else if orig.updated_datetime > updated_datetime {
+            tracing::warn!("Post {} updated_datetime went backwards: was {}, now {}", post_id, orig.updated_datetime, updated_datetime);
+            return Ok(FanboxPostUpdateResult::Skipped);
+        }
+
+        sqlx::query!(
+            r#"UPDATE fanbox_posts SET
+                creator_id=?,
+                title=?,
+                body=?,
+                fee=?,
+                published_datetime=datetime(?, 'utc'),
+                updated_datetime=datetime(?, 'utc'),
+                is_adult=?,
+                fetched_at=datetime('now', 'utc')
+            WHERE id = ?"#,
+            creator_id,
+            title,
+            body,
+            fee,
+            published_datetime,
+            updated_datetime,
+            is_adult,
+            post_id,
+        )
+        .execute(db)
+        .await?;
+        Ok(FanboxPostUpdateResult::Updated)
+    } else {
+        sqlx::query!(
+            r#"INSERT INTO fanbox_posts (
+                id,
+                creator_id,
+                title,
+                body,
+                fee,
+                published_datetime,
+                updated_datetime,
+                is_adult,
+                fetched_at
+            ) VALUES (
+                ?, ?, ?, ?, ?, datetime(?, 'utc'), datetime(?, 'utc'), ?, datetime('now', 'utc')
+            )"#,
+            post_id,
+            creator_id,
+            title,
+            body,
+            fee,
+            published_datetime,
+            updated_datetime,
+            is_adult,
+        )
+        .execute(db)
+        .await?;
+        Ok(FanboxPostUpdateResult::Inserted)
+    }
+}
+
+pub async fn query_fanbox_post_updated_datetime(post_id: u64) -> anyhow::Result<Option<chrono::DateTime<chrono::Utc>>> {
+    let db = get_db().await?;
+    let post_id = post_id as i64;
+    let rec = sqlx::query!(r#"SELECT updated_datetime as "updated_datetime: chrono::DateTime<chrono::Utc>" FROM fanbox_posts WHERE id = ?"#, post_id)
+        .fetch_optional(db)
+        .await?;
+    Ok(rec.map(|r| r.updated_datetime))
+}
+
+pub async fn add_fanbox_image(
+    post_id: u64,
+    img: &crate::data::fanbox::FetchPostImage,
+) -> anyhow::Result<bool> {
+    let db = get_db().await?;
+    let id = &img.id;
+    let post_id = post_id as i64;
+    let url = &img.original_url;
+    let width = img.width as i64;
+    let height = img.height as i64;
+    let ext = &img.extension;
+
+    let ret = sqlx::query!(
+        r#"INSERT OR IGNORE INTO fanbox_images (
+            id,
+            post_id,
+            url,
+            width,
+            height,
+            ext
+        ) VALUES (
+            ?, ?, ?, ?, ?, ?
+        )"#,
+        id,
+        post_id,
+        url,
+        width,
+        height,
+        ext,
+    )
+    .execute(db)
+    .await?
+    .rows_affected();
+
+    Ok(ret > 0)
+}
+
+pub async fn add_fanbox_file(
+    post_id: u64,
+    file: &crate::data::fanbox::FetchPostFile,
+) -> anyhow::Result<bool> {
+    let db = get_db().await?;
+
+    let id = &file.id;
+    let post_id = post_id as i64;
+    let name = &file.name;
+    let url = &file.url;
+    let size = file.size as i64;
+    let ext = &file.extension;
+
+    let ret = sqlx::query!(
+        r#"INSERT OR IGNORE INTO fanbox_files (
+            id,
+            post_id,
+            name,
+            url,
+            size,
+            ext
+        ) VALUES (
+            ?, ?, ?, ?, ?, ?
+        )"#,
+        id,
+        post_id,
+        name,
+        url,
+        size,
+        ext
+    )
+    .execute(db)
+    .await?
+    .rows_affected();
+
+    Ok(ret > 0)
+}

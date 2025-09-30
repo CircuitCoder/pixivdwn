@@ -81,12 +81,58 @@ pub struct FetchPostFile {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct FetchPostBodyRich {
+pub struct FetchPostBodyRichRaw {
     pub blocks: Vec<FetchPostBlock>,
     pub image_map: HashMap<String, FetchPostImage>,
     pub file_map: HashMap<String, FetchPostFile>,
     pub embed_map: HashMap<String, serde_json::Value>,
     pub url_embed_map: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(from = "FetchPostBodyRichRaw")]
+pub struct FetchPostBodyRich {
+    pub blocks: Vec<FetchPostBlock>,
+    pub images: Vec<(usize, FetchPostImage)>,
+    pub files: Vec<(usize, FetchPostFile)>,
+    pub embeds: Vec<(usize, serde_json::Value)>,
+    pub url_embeds: Vec<(usize, serde_json::Value)>,
+}
+
+// FIXME: move to try_from
+impl From<FetchPostBodyRichRaw> for FetchPostBodyRich {
+    fn from(mut raw: FetchPostBodyRichRaw) -> Self {
+        let mut images = Vec::new();
+        let mut files = Vec::new();
+
+        assert!(raw.embed_map.len() == 0);
+        assert!(raw.url_embed_map.len() == 0);
+
+        for (idx, block) in raw.blocks.iter().enumerate() {
+            match block {
+                FetchPostBlock::Image { image_id } => {
+                    let inner = raw.image_map.remove(image_id).unwrap();
+                    images.push((idx, inner));
+                }
+                FetchPostBlock::File { file_id } => {
+                    let inner = raw.file_map.remove(file_id).unwrap();
+                    files.push((idx, inner));
+                }
+                _ => {}
+            }
+        }
+
+        assert!(raw.image_map.len() == 0);
+        assert!(raw.file_map.len() == 0);
+
+        Self {
+            blocks: raw.blocks,
+            images,
+            files,
+            embeds: Vec::new(),
+            url_embeds: Vec::new(),
+        }
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -105,16 +151,16 @@ pub enum FetchPostBody {
 }
 
 impl FetchPostBody {
-    pub fn images<'a>(&'a self) -> Box<dyn Iterator<Item = &'a FetchPostImage> + 'a> {
+    pub fn images<'a>(&'a self) -> Box<dyn Iterator<Item = (usize, &'a FetchPostImage)> + 'a> {
         match self {
-            FetchPostBody::Rich(rich) => Box::new(rich.image_map.values()),
-            FetchPostBody::Simple(simple) => Box::new(simple.images.iter()),
+            FetchPostBody::Rich(rich) => Box::new(rich.images.iter().map(|(idx, img)| (*idx, img))),
+            FetchPostBody::Simple(simple) => Box::new(simple.images.iter().enumerate()),
         }
     }
 
-    pub fn files<'a>(&'a self) -> Box<dyn Iterator<Item = &'a FetchPostFile> + 'a> {
+    pub fn files<'a>(&'a self) -> Box<dyn Iterator<Item = (usize, &'a FetchPostFile)> + 'a> {
         match self {
-            FetchPostBody::Rich(rich) => Box::new(rich.file_map.values()),
+            FetchPostBody::Rich(rich) => Box::new(rich.files.iter().map(|(idx, file)| (*idx, file))),
             FetchPostBody::Simple(_) => Box::new(std::iter::empty()),
         }
     }

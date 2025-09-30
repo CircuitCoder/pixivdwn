@@ -22,6 +22,7 @@ CREATE TABLE fanbox_images (
     width INTEGER NOT NULL,
     height INTEGER NOT NULL,
     ext TEXT NOT NULL,
+    idx INTEGER NOT NULL,
 
     path TEXT,
     downloaded_at TEXT,
@@ -39,6 +40,7 @@ CREATE TABLE fanbox_files (
     url TEXT NOT NULL,
     size INTEGER NOT NULL,
     ext TEXT NOT NULL,
+    idx INTEGER NOT NULL,
 
     path TEXT,
     downloaded_at TEXT,

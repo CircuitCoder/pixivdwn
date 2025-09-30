@@ -532,6 +532,7 @@ pub async fn query_fanbox_post_updated_datetime(post_id: u64) -> anyhow::Result<
 
 pub async fn add_fanbox_image(
     post_id: u64,
+    idx: usize,
     img: &crate::data::fanbox::FetchPostImage,
 ) -> anyhow::Result<bool> {
     let db = get_db().await?;
@@ -541,6 +542,7 @@ pub async fn add_fanbox_image(
     let width = img.width as i64;
     let height = img.height as i64;
     let ext = &img.extension;
+    let idx = idx as i64;
 
     let ret = sqlx::query!(
         r#"INSERT OR IGNORE INTO fanbox_images (
@@ -549,9 +551,10 @@ pub async fn add_fanbox_image(
             url,
             width,
             height,
-            ext
+            ext,
+            idx
         ) VALUES (
-            ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?
         )"#,
         id,
         post_id,
@@ -559,6 +562,7 @@ pub async fn add_fanbox_image(
         width,
         height,
         ext,
+        idx,
     )
     .execute(db)
     .await?
@@ -569,6 +573,7 @@ pub async fn add_fanbox_image(
 
 pub async fn add_fanbox_file(
     post_id: u64,
+    idx: usize,
     file: &crate::data::fanbox::FetchPostFile,
 ) -> anyhow::Result<bool> {
     let db = get_db().await?;
@@ -579,6 +584,7 @@ pub async fn add_fanbox_file(
     let url = &file.url;
     let size = file.size as i64;
     let ext = &file.extension;
+    let idx = idx as i64;
 
     let ret = sqlx::query!(
         r#"INSERT OR IGNORE INTO fanbox_files (
@@ -587,16 +593,18 @@ pub async fn add_fanbox_file(
             name,
             url,
             size,
-            ext
+            ext,
+            idx
         ) VALUES (
-            ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?
         )"#,
         id,
         post_id,
         name,
         url,
         size,
-        ext
+        ext,
+        idx
     )
     .execute(db)
     .await?

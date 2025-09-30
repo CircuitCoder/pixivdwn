@@ -93,6 +93,7 @@ pub struct FetchPostBodyRich {
 #[serde(rename_all = "camelCase")]
 pub struct FetchPostBodySimple {
     pub text: String,
+    #[serde(default)]
     pub images: Vec<FetchPostImage>,
 }
 

@@ -5,45 +5,7 @@ use serde::{Deserialize, Serialize, de::IgnoredAny};
 use serde_repr::Deserialize_repr;
 
 use crate::config::Session;
-
-fn de_str_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let s: &str = Deserialize::deserialize(deserializer)?;
-    s.parse::<u64>().map_err(serde::de::Error::custom)
-}
-
-fn de_str_or_u64_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    struct StrOrU64;
-
-    impl<'de> serde::de::Visitor<'de> for StrOrU64 {
-        type Value = u64;
-
-        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            formatter.write_str("string or u64")
-        }
-
-        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
-            v.parse::<u64>().map_err(serde::de::Error::custom)
-        }
-
-        fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
-            Ok(v)
-        }
-    }
-
-    deserializer.deserialize_any(StrOrU64)
-}
+use super::Response;
 
 #[derive(Deserialize_repr, sqlx::Type, Debug, Clone, Copy)]
 #[repr(u8)]
@@ -71,7 +33,7 @@ pub enum AIType {
 
 #[derive(Deserialize, Debug)]
 pub struct BookmarkData {
-    #[serde(deserialize_with = "de_str_to_u64")]
+    #[serde(deserialize_with = "super::de_str_to_u64")]
     id: u64,
     private: bool,
 }
@@ -83,7 +45,7 @@ pub struct DetailedTag {
     pub tag: String,
     pub locked: bool,
     pub deletable: bool,
-    #[serde(deserialize_with = "de_str_to_u64")]
+    #[serde(deserialize_with = "super::de_str_to_u64")]
     pub user_id: u64,
     pub user_name: String,
     pub romaji: Option<String>,
@@ -97,7 +59,7 @@ pub enum Tags {
     #[serde(rename_all = "camelCase")]
     #[allow(unused)]
     Detailed {
-        #[serde(deserialize_with = "de_str_to_u64")]
+        #[serde(deserialize_with = "super::de_str_to_u64")]
         author_id: u64,
         is_locked: bool,
         writable: bool,
@@ -118,7 +80,7 @@ impl Tags {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct FetchWorkBrief {
-    #[serde(deserialize_with = "de_str_or_u64_to_u64")]
+    #[serde(deserialize_with = "super::de_str_or_u64_to_u64")]
     id: u64,
     title: String,
     tags: Tags,
@@ -130,7 +92,7 @@ pub struct FetchWorkBrief {
     #[allow(unused)]
     restrict: u8, // TODO: figure out what is this
 
-    #[serde(deserialize_with = "de_str_or_u64_to_u64")]
+    #[serde(deserialize_with = "super::de_str_or_u64_to_u64")]
     user_id: u64,
     user_name: String,
     user_account: Option<String>,
@@ -228,7 +190,7 @@ pub struct Page {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct FetchWorkDetail {
-    #[serde(deserialize_with = "de_str_to_u64")]
+    #[serde(deserialize_with = "super::de_str_to_u64")]
     pub illust_id: u64,
     pub illust_title: String,
     pub illust_comment: String,
@@ -357,23 +319,6 @@ pub struct UgoiraMeta {
     #[serde(rename = "mime_type")]
     pub mime_type: String,
     pub frames: Vec<UgoiraFrame>,
-}
-
-#[derive(Deserialize)]
-pub struct Response<T> {
-    pub error: bool,
-    pub message: String,
-    pub body: T,
-}
-
-impl<T> Response<T> {
-    pub fn into_body(self) -> anyhow::Result<T> {
-        if self.error {
-            Err(anyhow::anyhow!("API error: {}", self.message))
-        } else {
-            Ok(self.body)
-        }
-    }
 }
 
 async fn get_bookmarks_page(

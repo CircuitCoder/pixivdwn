@@ -14,7 +14,7 @@ pub struct Illust {
 
 impl Illust {
     pub async fn run(self, session: &crate::config::Session) -> anyhow::Result<()> {
-        let illust = crate::data::get_illust(session, self.id).await?;
+        let illust = crate::data::pixiv::get_illust(session, self.id).await?;
         if self.dry_run {
             tracing::info!("Fetched: {:?}", illust);
             return Ok(());

@@ -1,6 +1,6 @@
 use clap::Args;
 
-use crate::data::IllustState;
+use crate::data::pixiv::IllustState;
 
 #[derive(clap::ValueEnum, Clone, Copy)]
 pub enum QueryDownloadState {
@@ -106,7 +106,7 @@ impl Query {
         }
 
         if let Some(state) = self.state {
-            wheres.push(format!("state = {}", state as u8));
+            wheres.push(format!("illust_state = {}", state as u8));
         }
 
         if let Some(download_state) = self.download_state {

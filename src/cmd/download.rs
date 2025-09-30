@@ -3,6 +3,8 @@ use std::{collections::HashSet, io::Read, path::PathBuf};
 use clap::Args;
 use tempfile::NamedTempFile;
 
+use crate::data::pixiv::IllustType;
+
 #[derive(clap::ValueEnum, Clone, Copy)]
 enum DatabasePathFormat {
     /// Only store the path relative to the base.
@@ -80,7 +82,7 @@ impl Download {
             )
         })?;
         let induced_download_type = match illust_type {
-            crate::data::IllustType::Ugoira => DownloadType::Ugoira,
+            IllustType::Ugoira => DownloadType::Ugoira,
             _ => DownloadType::Image,
         };
         let download_type = self.download_type.unwrap_or(induced_download_type);
@@ -93,7 +95,7 @@ impl Download {
 
         match download_type {
             DownloadType::Image => {
-                let pages = crate::data::get_illust_pages(session, self.id).await?;
+                let pages = crate::data::pixiv::get_illust_pages(session, self.id).await?;
                 let tot_pages = pages.len();
                 tracing::info!("Downloading {} pages...", tot_pages);
                 for (idx, page) in pages.iter().enumerate() {
@@ -142,7 +144,7 @@ impl Download {
                     return Ok(());
                 }
 
-                let meta = crate::data::get_illust_ugoira_meta(session, self.id).await?;
+                let meta = crate::data::pixiv::get_illust_ugoira_meta(session, self.id).await?;
                 tracing::info!("Downloading ugoira...");
                 let url = &meta.original_src;
                 let filename = url.split('/').last().unwrap();

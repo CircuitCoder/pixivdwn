@@ -4,7 +4,7 @@ use serde::Serialize;
 use sqlx::{migrate::Migrator, sqlite::{SqliteConnectOptions, SqliteRow}, SqlitePool};
 use tokio::sync::OnceCell;
 
-use crate::data::{IllustBookmarkTags, IllustState, UgoiraFrame};
+use crate::data::pixiv::{IllustBookmarkTags, IllustState, UgoiraFrame};
 
 static DB: OnceCell<sqlx::SqlitePool> = OnceCell::const_new();
 static DBURL: OnceCell<String> = OnceCell::const_new();
@@ -69,7 +69,7 @@ pub enum IllustUpdateResult {
 }
 
 pub async fn update_illust(
-    illust: &crate::data::Illust,
+    illust: &crate::data::pixiv::Illust,
     tag_map_ctx: &mut HashMap<String, u64>,
 ) -> anyhow::Result<IllustUpdateResult> {
     // Update illust content (title, caption, etc.)
@@ -399,11 +399,11 @@ pub async fn update_image(
     Ok(())
 }
 
-pub async fn get_illust_type(illust_id: u64) -> anyhow::Result<Option<crate::data::IllustType>> {
+pub async fn get_illust_type(illust_id: u64) -> anyhow::Result<Option<crate::data::pixiv::IllustType>> {
     let db = get_db().await?;
     let illust_id = illust_id as i64;
     let rec = sqlx::query!(
-        r#"SELECT illust_type as "illust_type!: crate::data::IllustType" FROM illusts WHERE id = ?"#,
+        r#"SELECT illust_type as "illust_type!: crate::data::pixiv::IllustType" FROM illusts WHERE id = ?"#,
         illust_id,
     )
     .fetch_optional(db)

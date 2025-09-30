@@ -141,6 +141,8 @@ pub struct FetchPostBodySimple {
     pub text: String,
     #[serde(default)]
     pub images: Vec<FetchPostImage>,
+    #[serde(default)]
+    pub files: Vec<FetchPostFile>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -161,7 +163,10 @@ impl FetchPostBody {
     pub fn files<'a>(&'a self) -> Box<dyn Iterator<Item = (usize, &'a FetchPostFile)> + 'a> {
         match self {
             FetchPostBody::Rich(rich) => Box::new(rich.files.iter().map(|(idx, file)| (*idx, file))),
-            FetchPostBody::Simple(_) => Box::new(std::iter::empty()),
+            FetchPostBody::Simple(simple) => {
+                let img_len = simple.images.len();
+                Box::new(simple.files.iter().enumerate().map(move |(i, file)| (i + img_len, file)))
+            }
         }
     }
 

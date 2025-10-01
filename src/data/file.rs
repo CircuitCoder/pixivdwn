@@ -8,7 +8,8 @@ pub async fn download<W: std::io::Write, R: RequestArgumenter>(
     mut dst: W,
     show_progress: bool,
 ) -> anyhow::Result<()> {
-    let client = wreq::Client::new();
+    let fetch_ctx = crate::fetch::FetchCtxGuard::begin().await;
+    let client = fetch_ctx.client();
 
     let req = client.get(url).prepare_with(req_arg)?.build()?;
 

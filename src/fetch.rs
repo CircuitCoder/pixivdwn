@@ -1,43 +1,55 @@
 use serde::de::DeserializeOwned;
 
 // Rate-limiter
-static CTX: tokio::sync::Mutex<Option<(
-    wreq::Client,
-    tokio::time::Instant
-)>> = tokio::sync::Mutex::const_new(None);
+type Ctx = (wreq::Client, tokio::time::Instant);
+static CTX: tokio::sync::Mutex<Option<Ctx>> = tokio::sync::Mutex::const_new(None);
 
 const DELAY_MS: i64 = 2500;
 const DELAY_RANDOM_VAR_MS: i64 = 500;
 
-#[inline]
-pub async fn fetch<T: DeserializeOwned>(req: impl FnOnce(&wreq::Client) -> anyhow::Result<wreq::Request>) -> anyhow::Result<T> {
-    let mut next = CTX.lock().await;
-    let (client_ref, ddl_ref) = match &mut *next {
-        None => {
-            let client = wreq::Client::new();
-            *next = Some((client, tokio::time::Instant::now()));
-            let tuple = next.as_mut().unwrap();
-            (&mut tuple.0, &mut tuple.1)
-        },
-        Some((client, ddl)) => {
-            tokio::time::sleep_until(*ddl).await;
-            (client, ddl)
+pub struct FetchCtxGuard<'a> {
+    guard: tokio::sync::MutexGuard<'a, Option<Ctx>>,
+}
+
+impl<'a> FetchCtxGuard<'a> {
+    pub async fn begin() -> FetchCtxGuard<'static> {
+        let mut next = CTX.lock().await;
+        match &mut *next {
+            None => {
+                let client = wreq::Client::new();
+                *next = Some((client, tokio::time::Instant::now()));
+            },
+            Some((_, ddl)) => {
+                tokio::time::sleep_until(*ddl).await;
+            }
+        };
+
+        FetchCtxGuard {
+            guard: next,
         }
-    };
-
-
-    let req = req(client_ref)?;
-    async fn fetch_inner<T: DeserializeOwned>(client_ref: &wreq::Client, req: wreq::Request) -> anyhow::Result<T> {
-        let resp = client_ref.execute(req).await?;
-        let json = resp.json::<T>().await?;
-        Ok(json)
     }
 
-    let ret = fetch_inner(client_ref, req).await;
-    let delay = std::time::Duration::from_millis(
-        (DELAY_MS + rand::random_range(-DELAY_RANDOM_VAR_MS..=DELAY_RANDOM_VAR_MS)) as u64,
-    );
-    *ddl_ref = tokio::time::Instant::now() + delay;
+    pub fn client(&self) -> &wreq::Client {
+        &self.guard.as_ref().unwrap().0
+    }
+}
 
-    ret
+impl Drop for FetchCtxGuard<'_> {
+    fn drop(&mut self) {
+        let delay = std::time::Duration::from_millis(
+            (DELAY_MS + rand::random_range(-DELAY_RANDOM_VAR_MS..=DELAY_RANDOM_VAR_MS)) as u64,
+        );
+        self.guard.as_mut().unwrap().1 = tokio::time::Instant::now() + delay;
+    }
+}
+
+#[inline]
+pub async fn fetch<T: DeserializeOwned>(req: impl FnOnce(&wreq::Client) -> anyhow::Result<wreq::Request>) -> anyhow::Result<T> {
+    let ctx = FetchCtxGuard::begin().await;
+
+    let client = ctx.client();
+    let req = req(client)?;
+    let resp = client.execute(req).await?;
+    let json = resp.json::<T>().await?;
+    Ok(json)
 }

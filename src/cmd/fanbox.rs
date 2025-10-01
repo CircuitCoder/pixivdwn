@@ -1,108 +1,113 @@
 use clap::{Args, Subcommand};
 use futures::StreamExt;
 
-use crate::data::fanbox::FanboxRequest;
+use crate::{
+    data::fanbox::FanboxRequest,
+    util::{DatabasePathFormat, DownloadResult},
+};
 
 #[derive(Args)]
 pub struct Fanbox {
     #[command(subcommand)]
     cmd: FanboxCmd,
+}
 
-    /// Base directory to save the files
-    ///
-    /// The illustrations will be saved as `<base_dir>/<post_id>_<idx>_<image_id>[_<name>].<ext>`
-    #[arg(short, long, default_value = "fanbox")]
-    base_dir: String,
+#[derive(clap::ValueEnum, Clone, Copy)]
+pub enum FanboxDownloadType {
+    File,
+    Image,
 }
 
 #[derive(Subcommand)]
 pub enum FanboxCmd {
     /// Synchronize posts from a Fanbox creator
-    SyncCreator {
+    Sync {
         /// ID of the Fanbox creator
         creator: String,
     },
 
-    DownloadFile {
-        /// ID of the Fanbox file
-        id: String,
-    },
+    /// Download a specific synced file or image
+    Download {
+        /// Type of the downloaded item
+        #[arg(value_enum)]
+        r#type: FanboxDownloadType,
 
-    DownloadImage {
-        /// ID of the Fanbox image
+        /// ID of the image / file
         id: String,
+
+        /// Base directory to save the files
+        ///
+        /// The illustrations will be saved as `<base_dir>/<post_id>_<idx>_<image_id>[_<name>].<ext>`
+        #[arg(short, long, default_value = "fanbox")]
+        base_dir: String,
+
+        /// Create base directory if not exist
+        #[arg(long)]
+        mkdir: bool,
+
+        /// Canonicalization for paths recorded in database
+        #[arg(long, value_enum, default_value_t = DatabasePathFormat::Absolute)]
+        database_path_format: DatabasePathFormat,
+
+        /// Show progress bar. The download speed is based on the *UNZIPPED* stream, so don't be surprised if it exceeds your bandwidth.
+        #[arg(short, long)]
+        progress: bool,
     },
 }
 
 impl Fanbox {
     pub async fn run(self, session: &crate::config::Session) -> anyhow::Result<()> {
         match self.cmd {
-            FanboxCmd::SyncCreator { creator } => {
-                sync_creator(session, &creator).await?;
+            FanboxCmd::Sync { creator } => {
+                sync(session, &creator).await?;
             }
-            FanboxCmd::DownloadFile { id } => {
-                let spec = crate::db::query_fanbox_file_dwn(&id)
-                    .await?
-                    .ok_or_else(|| anyhow::anyhow!("File {} not found in database", id))?;
-                let filename = format!(
-                    "{}_{}_{}_{}.{}",
-                    spec.post_id, spec.idx, id, spec.name, spec.ext
+            FanboxCmd::Download {
+                r#type,
+                id,
+                database_path_format,
+                base_dir,
+                mkdir,
+                progress,
+            } => {
+                if mkdir {
+                    std::fs::create_dir_all(&base_dir)?;
+                }
+                let (url, filename) = get_download_spec(r#type, &id).await?;
+                let DownloadResult { written_path, .. } = crate::util::download_then_persist(
+                    FanboxRequest(session),
+                    &base_dir,
+                    &filename,
+                    database_path_format,
+                    &url,
+                    progress,
+                )
+                .await?;
+                let updated = match r#type {
+                    FanboxDownloadType::File => {
+                        crate::db::update_file_download(&id, written_path.to_str().unwrap()).await?
+                    }
+                    FanboxDownloadType::Image => {
+                        crate::db::update_image_download(&id, written_path.to_str().unwrap())
+                            .await?
+                    }
+                };
+
+                assert!(
+                    updated,
+                    "{} {} should exist in database. Possible DB race",
+                    match r#type {
+                        FanboxDownloadType::File => "File",
+                        FanboxDownloadType::Image => "Image",
+                    },
+                    id
                 );
-                // FIXME: Let's get a quick hack
-                let final_path = std::path::Path::new(&self.base_dir).join(&filename);
-                tracing::info!("Downloading file {} to {}", id, final_path.display());
-                if final_path.exists() {
-                    return Err(anyhow::anyhow!(
-                        "File already exists: {}",
-                        final_path.display()
-                    ));
-                }
-
-                crate::data::file::download(
-                    FanboxRequest(session),
-                    &spec.url,
-                    std::io::BufWriter::new(std::fs::File::create(&final_path)?),
-                    true,
-                )
-                .await?;
-
-                let updated =
-                    crate::db::update_file_download(&id, final_path.to_str().unwrap()).await?;
-                assert!(updated, "File {} should exist in database", id);
-            }
-            FanboxCmd::DownloadImage { id } => {
-                let spec = crate::db::query_fanbox_image_dwn(&id)
-                    .await?
-                    .ok_or_else(|| anyhow::anyhow!("Image {} not found in database", id))?;
-                let filename = format!("{}_{}_{}.{}", spec.post_id, spec.idx, id, spec.ext);
-
-                let final_path = std::path::Path::new(&self.base_dir).join(&filename);
-                tracing::info!("Downloading image {} to {}", id, final_path.display());
-                if final_path.exists() {
-                    return Err(anyhow::anyhow!(
-                        "File already exists: {}",
-                        final_path.display()
-                    ));
-                }
-
-                crate::data::file::download(
-                    FanboxRequest(session),
-                    &spec.url,
-                    std::io::BufWriter::new(std::fs::File::create(&final_path)?),
-                    true,
-                )
-                .await?;
-
-                let updated =
-                    crate::db::update_image_download(&id, final_path.to_str().unwrap()).await?;
-                assert!(updated, "Image {} should exist in database", id);
             }
         }
         Ok(())
     }
 }
 
-async fn sync_creator(session: &crate::config::Session, creator: &str) -> anyhow::Result<()> {
+async fn sync(session: &crate::config::Session, creator: &str) -> anyhow::Result<()> {
     const DELAY_MS: i64 = 2500;
     const DELAY_RANDOM_VAR_MS: i64 = 500;
 
@@ -161,4 +166,27 @@ async fn sync_creator(session: &crate::config::Session, creator: &str) -> anyhow
         }
     }
     Ok(())
+}
+
+/// Return (url, filename)
+async fn get_download_spec(ty: FanboxDownloadType, id: &str) -> anyhow::Result<(String, String)> {
+    match ty {
+        FanboxDownloadType::File => {
+            let spec = crate::db::query_fanbox_file_dwn(id)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("File {} not found in database", id))?;
+            let filename = format!(
+                "{}_{}_{}_{}.{}",
+                spec.post_id, spec.idx, id, spec.name, spec.ext
+            );
+            Ok((spec.url, filename))
+        }
+        FanboxDownloadType::Image => {
+            let spec = crate::db::query_fanbox_image_dwn(id)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("Image {} not found in database", id))?;
+            let filename = format!("{}_{}_{}.{}", spec.post_id, spec.idx, id, spec.ext);
+            Ok((spec.url, filename))
+        }
+    }
 }

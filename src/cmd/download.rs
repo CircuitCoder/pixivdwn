@@ -35,7 +35,7 @@ pub struct Download {
     #[arg(short, long, default_value = "images")]
     base_dir: String,
 
-    /// Whether to skip canonicalizing the path written into database
+    /// Canonicalization for paths recorded in database
     #[arg(long, value_enum, default_value_t = DatabasePathFormat::Absolute)]
     database_path_format: DatabasePathFormat,
 

@@ -32,6 +32,10 @@ pub enum FanboxCmd {
         /// Skip pages. Can only be used when `creator` is specified
         #[arg(long, requires("creator"))]
         skip_pages: Option<usize>,
+
+        /// Maximum number of retries for post fetch
+        #[arg(short, long, default_value_t = 0)]
+        retries: usize,
     },
 
     /// Download a specific synced file or image
@@ -70,12 +74,20 @@ impl Fanbox {
                 creator,
                 termination,
                 skip_pages,
+                retries,
             } => {
                 if let Some(creator) = creator {
-                    sync(session, &creator, termination, skip_pages.unwrap_or(0)).await?
+                    sync(
+                        session,
+                        &creator,
+                        termination,
+                        skip_pages.unwrap_or(0),
+                        retries,
+                    )
+                    .await?
                 } else {
                     assert!(skip_pages.is_none());
-                    sync_all(session, termination).await?
+                    sync_all(session, termination, retries).await?
                 }
             }
             FanboxCmd::Download {
@@ -129,6 +141,7 @@ async fn sync(
     creator: &str,
     term: TerminationCondition,
     skip_pages: usize,
+    retries: usize,
 ) -> anyhow::Result<()> {
     let mut posts = Box::pin(crate::data::fanbox::fetch_author_posts(
         session, creator, skip_pages,
@@ -156,7 +169,19 @@ async fn sync(
         }
 
         let id = post.id;
-        let detail = crate::data::fanbox::fetch_post(session, id).await?;
+        let mut tries = 0;
+        let detail = loop {
+            match crate::data::fanbox::fetch_post(session, id).await {
+                Err(e) => {
+                    tracing::warn!("Failed to fetch post {}: {}", id, e);
+                    if tries == retries {
+                        anyhow::bail!("Failed to fetch post {} after {} tries", id, 1 + retries);
+                    }
+                    tries += 1;
+                }
+                Ok(d) => break d,
+            }
+        };
 
         let updated = crate::db::update_fanbox_post(&detail).await?;
         let prompt = match updated {
@@ -219,6 +244,7 @@ async fn get_download_spec(ty: FanboxDownloadType, id: &str) -> anyhow::Result<(
 async fn sync_all(
     session: &crate::config::Session,
     term: TerminationCondition,
+    retries: usize,
 ) -> anyhow::Result<()> {
     let creators = crate::data::fanbox::fetch_supporting_list(session).await?;
     for creator in creators {
@@ -231,7 +257,7 @@ async fn sync_all(
                 .unwrap_or("?"),
             creator.creator_id
         );
-        sync(session, &creator.creator_id, term, 0).await?;
+        sync(session, &creator.creator_id, term, 0, retries).await?;
     }
     Ok(())
 }

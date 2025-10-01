@@ -477,7 +477,6 @@ pub async fn update_fanbox_post(
     let fee = post.fee_required as i64;
     let published_datetime = post.published_datetime;
     let updated_datetime = post.updated_datetime;
-    let is_adult = post.has_adult_content;
 
     let orig = sqlx::query!(r#"SELECT id, updated_datetime as "updated_datetime: chrono::DateTime<chrono::Utc>" FROM fanbox_posts WHERE id = ?"#, post_id)
         .fetch_optional(db)
@@ -505,7 +504,6 @@ pub async fn update_fanbox_post(
                 fee=?,
                 published_datetime=datetime(?, 'utc'),
                 updated_datetime=datetime(?, 'utc'),
-                is_adult=?,
                 fetched_at=datetime('now', 'utc')
             WHERE id = ?"#,
             creator_id,
@@ -515,7 +513,6 @@ pub async fn update_fanbox_post(
             fee,
             published_datetime,
             updated_datetime,
-            is_adult,
             post_id,
         )
         .execute(db)
@@ -532,10 +529,9 @@ pub async fn update_fanbox_post(
                 fee,
                 published_datetime,
                 updated_datetime,
-                is_adult,
                 fetched_at
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, datetime(?, 'utc'), datetime(?, 'utc'), ?, datetime('now', 'utc')
+                ?, ?, ?, ?, ?, ?, datetime(?, 'utc'), datetime(?, 'utc'), datetime('now', 'utc')
             )"#,
             post_id,
             creator_id,
@@ -545,7 +541,6 @@ pub async fn update_fanbox_post(
             fee,
             published_datetime,
             updated_datetime,
-            is_adult,
         )
         .execute(db)
         .await?;
@@ -650,7 +645,7 @@ pub async fn add_fanbox_file(
 pub struct FanboxFileDownloadSpec {
     pub url: String,
     pub name: String,
-    pub post_id: String,
+    pub post_id: i64,
     pub ext: String,
     pub idx: i64,
 }
@@ -669,7 +664,7 @@ pub async fn query_fanbox_file_dwn(id: &str) -> anyhow::Result<Option<FanboxFile
 
 pub struct FanboxImageDownloadSpec {
     pub url: String,
-    pub post_id: String,
+    pub post_id: i64,
     pub ext: String,
     pub idx: i64,
 }

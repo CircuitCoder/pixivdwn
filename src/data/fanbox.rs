@@ -10,24 +10,24 @@ use crate::{
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-#[allow(unused)]
 pub struct LinkedPixivUser {
     #[serde(deserialize_with = "super::de_str_to_u64")]
+    #[expect(unused)]
     pub user_id: u64,
     pub name: String,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-#[allow(unused)]
 pub struct FetchPostCover {
+    #[expect(unused)]
     r#type: String,
+    #[expect(unused)]
     url: String,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-#[allow(unused)]
 pub struct FetchPost {
     #[serde(deserialize_with = "super::de_str_to_u64")]
     pub id: u64,
@@ -35,19 +35,30 @@ pub struct FetchPost {
     pub fee_required: u64,
     pub published_datetime: chrono::DateTime<chrono::FixedOffset>,
     pub updated_datetime: chrono::DateTime<chrono::FixedOffset>,
+    #[expect(unused)]
     pub tags: Vec<String>,
 
+    #[expect(unused)]
     pub is_liked: bool,
+    #[expect(unused)]
     pub like_count: usize,
+    #[expect(unused)]
     pub is_commenting_restricted: bool,
+    #[expect(unused)]
     pub comment_count: usize,
+
     pub is_restricted: bool,
 
+    #[expect(unused)]
     pub user: Option<LinkedPixivUser>,
     pub creator_id: String,
+    #[expect(unused)]
     pub has_adult_content: bool,
+    #[expect(unused)]
     pub cover: Option<FetchPostCover>,
+    #[expect(unused)]
     pub excerpt: String,
+    #[expect(unused)]
     pub is_pinned: bool,
 }
 
@@ -90,7 +101,7 @@ pub struct FetchPostImage {
     pub width: u64,
     pub height: u64,
     pub original_url: String,
-    #[allow(unused)]
+    #[expect(unused)]
     pub thumbnail_url: String,
 }
 
@@ -108,6 +119,7 @@ pub struct FetchPostFile {
 #[serde(rename_all = "camelCase")]
 pub struct FetchPostUrlEmbed {
     #[serde(skip_serializing)]
+    #[expect(unused)]
     pub id: String,
     pub r#type: String,
     pub html: String,
@@ -375,14 +387,19 @@ pub async fn fetch_post(session: &Session, post_id: u64) -> anyhow::Result<Fetch
 #[serde(rename_all = "camelCase")]
 pub struct SupportedCreator {
     #[serde(deserialize_with = "super::de_str_to_u64")]
+    #[expect(unused)]
     pub id: u64,
     pub creator_id: String,
     pub user: Option<LinkedPixivUser>,
+    #[expect(unused)]
     pub has_adult_content: bool,
 
     // Supporting plan
+    #[expect(unused)]
     pub fee: u64,
+    #[expect(unused)]
     pub title: String,
+    #[expect(unused)]
     pub description: String,
 }
 

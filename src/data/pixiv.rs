@@ -42,15 +42,20 @@ pub struct BookmarkData {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-#[allow(unused)]
 pub struct DetailedTag {
     pub tag: String,
+    #[expect(unused)]
     pub locked: bool,
+    #[expect(unused)]
     pub deletable: bool,
     #[serde(deserialize_with = "super::de_str_to_u64")]
+    #[expect(unused)]
     pub user_id: u64,
+    #[expect(unused)]
     pub user_name: String,
+    #[expect(unused)]
     pub romaji: Option<String>,
+    #[expect(unused)]
     pub translation: Option<HashMap<String, String>>,
 }
 
@@ -59,7 +64,7 @@ pub struct DetailedTag {
 pub enum Tags {
     Brief(Vec<String>),
     #[serde(rename_all = "camelCase")]
-    #[allow(unused)]
+    #[expect(unused)]
     Detailed {
         #[serde(deserialize_with = "super::de_str_to_u64")]
         author_id: u64,
@@ -91,7 +96,7 @@ pub struct FetchWorkBrief {
     illust_type: IllustType,
     page_count: u64,
 
-    #[allow(unused)]
+    #[expect(unused)]
     restrict: u8, // TODO: figure out what is this
 
     #[serde(deserialize_with = "super::de_str_or_u64_to_u64")]
@@ -104,9 +109,9 @@ pub struct FetchWorkBrief {
     #[serde(alias = "uploadDate")] // Detail field
     update_date: chrono::DateTime<chrono::FixedOffset>,
 
-    #[allow(unused)]
+    #[expect(unused)]
     width: u64,
-    #[allow(unused)]
+    #[expect(unused)]
     height: u64,
 
     #[serde(default)] // For single illust API
@@ -170,13 +175,13 @@ impl Into<Illust> for FetchWorkBrief {
 #[derive(Deserialize, Debug)]
 pub struct PageUrls {
     #[serde(alias = "thumb_mini")]
-    #[allow(unused)]
+    #[expect(unused)]
     pub mini: String,
-    #[allow(unused)]
+    #[expect(unused)]
     pub thumb: Option<String>,
-    #[allow(unused)]
+    #[expect(unused)]
     pub small: String,
-    #[allow(unused)]
+    #[expect(unused)]
     pub regular: String,
 
     pub original: String,
@@ -201,18 +206,18 @@ pub struct FetchWorkDetail {
     #[serde(flatten)]
     pub brief: FetchWorkBrief,
 
-    #[allow(unused)]
+    #[expect(unused)]
     pub bookmark_count: u64,
-    #[allow(unused)]
+    #[expect(unused)]
     pub like_count: u64,
-    #[allow(unused)]
+    #[expect(unused)]
     pub comment_count: u64,
-    #[allow(unused)]
+    #[expect(unused)]
     pub response_count: u64,
-    #[allow(unused)]
+    #[expect(unused)]
     pub view_count: u64,
 
-    #[allow(unused)]
+    #[expect(unused)]
     pub urls: PageUrls,
 
     pub is_howto: bool,
@@ -315,7 +320,7 @@ pub struct UgoiraFrame {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UgoiraMeta {
-    #[allow(unused)]
+    #[expect(unused)]
     pub src: String,
     pub original_src: String,
     #[serde(rename = "mime_type")]

@@ -18,15 +18,13 @@ impl<'a> FetchCtxGuard<'a> {
             None => {
                 let client = wreq::Client::new();
                 *next = Some((client, tokio::time::Instant::now()));
-            },
+            }
             Some((_, ddl)) => {
                 tokio::time::sleep_until(*ddl).await;
             }
         };
 
-        FetchCtxGuard {
-            guard: next,
-        }
+        FetchCtxGuard { guard: next }
     }
 
     pub fn client(&self) -> &wreq::Client {
@@ -44,7 +42,9 @@ impl Drop for FetchCtxGuard<'_> {
 }
 
 #[inline]
-pub async fn fetch<T: DeserializeOwned>(req: impl FnOnce(&wreq::Client) -> anyhow::Result<wreq::Request>) -> anyhow::Result<T> {
+pub async fn fetch<T: DeserializeOwned>(
+    req: impl FnOnce(&wreq::Client) -> anyhow::Result<wreq::Request>,
+) -> anyhow::Result<T> {
     let ctx = FetchCtxGuard::begin().await;
 
     let client = ctx.client();

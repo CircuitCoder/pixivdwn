@@ -13,8 +13,8 @@ use crate::{
 #[allow(unused)]
 pub struct LinkedPixivUser {
     #[serde(deserialize_with = "super::de_str_to_u64")]
-    user_id: u64,
-    name: String,
+    pub user_id: u64,
+    pub name: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -253,7 +253,6 @@ impl<'a> RequestArgumenter for FanboxRequest<'a> {
         let updated = updated
             .header("Origin", "https://www.fanbox.cc")
             .header("Referer", "https://www.fanbox.cc/")
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
             .emulation(wreq_util::Emulation::Chrome140);
         Ok(updated)
     }
@@ -284,9 +283,13 @@ pub async fn get_author_paginates(
         author_id
     );
 
-    let json: Response<Vec<String>> = crate::fetch::fetch(|client|
-        Ok(client.get(&url).prepare_with(FanboxRequest(session))?.build()?)
-    ).await?;
+    let json: Response<Vec<String>> = crate::fetch::fetch(|client| {
+        Ok(client
+            .get(&url)
+            .prepare_with(FanboxRequest(session))?
+            .build()?)
+    })
+    .await?;
 
     json.into_body()
 }
@@ -297,12 +300,12 @@ pub fn fetch_author_posts(
 ) -> impl futures::Stream<Item = anyhow::Result<FetchPost>> {
     try_stream! {
         let paginates = get_author_paginates(session, author_id).await?;
-        for page_url in paginates {
-            // FIXME: assert page_url format
-            tracing::info!("Fetching: {}", page_url);
+        for (page, url) in paginates.iter().enumerate() {
+            // FIXME: assert url format
+            tracing::info!("Fetching page {}/{}", page + 1, paginates.len());
 
             let posts: Response<Vec<FetchPost>> = crate::fetch::fetch(|client| {
-                Ok(client.get(&page_url).prepare_with(FanboxRequest(session))?.build()?)
+                Ok(client.get(url).prepare_with(FanboxRequest(session))?.build()?)
             }).await?;
             for post in posts.into_body()? {
                 yield post;
@@ -315,7 +318,38 @@ pub async fn fetch_post(session: &Session, post_id: u64) -> anyhow::Result<Fetch
     let url = format!("https://api.fanbox.cc/post.info?postId={}", post_id);
 
     let json: Response<FetchPostDetail> = crate::fetch::fetch(|client| {
-        Ok(client.get(&url).prepare_with(FanboxRequest(session))?.build()?)
-    }).await?;
+        Ok(client
+            .get(&url)
+            .prepare_with(FanboxRequest(session))?
+            .build()?)
+    })
+    .await?;
+    json.into_body()
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SupportedCreator {
+    #[serde(deserialize_with = "super::de_str_to_u64")]
+    pub id: u64,
+    pub creator_id: String,
+    pub user: Option<LinkedPixivUser>,
+    pub has_adult_content: bool,
+
+    // Supporting plan
+    pub fee: u64,
+    pub title: String,
+    pub description: String,
+}
+
+pub async fn fetch_supporting_list(session: &Session) -> anyhow::Result<Vec<SupportedCreator>> {
+    let url = "https://api.fanbox.cc/plan.listSupporting";
+    let json: Response<Vec<SupportedCreator>> = crate::fetch::fetch(|client| {
+        Ok(client
+            .get(url)
+            .prepare_with(FanboxRequest(session))?
+            .build()?)
+    })
+    .await?;
     json.into_body()
 }

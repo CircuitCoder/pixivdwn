@@ -22,8 +22,8 @@ pub enum FanboxDownloadType {
 pub enum FanboxCmd {
     /// Synchronize posts from a Fanbox creator
     Sync {
-        /// ID of the Fanbox creator
-        creator: String,
+        /// ID of the Fanbox creator. If not spcified, sync all supported creators
+        creator: Option<String>,
     },
 
     /// Download a specific synced file or image
@@ -59,7 +59,11 @@ impl Fanbox {
     pub async fn run(self, session: &crate::config::Session) -> anyhow::Result<()> {
         match self.cmd {
             FanboxCmd::Sync { creator } => {
-                sync(session, &creator).await?;
+                if let Some(creator) = creator {
+                    sync(session, &creator).await?
+                } else {
+                    sync_all(session).await?
+                }
             }
             FanboxCmd::Download {
                 r#type,
@@ -181,4 +185,21 @@ async fn get_download_spec(ty: FanboxDownloadType, id: &str) -> anyhow::Result<(
             Ok((spec.url, filename))
         }
     }
+}
+
+async fn sync_all(session: &crate::config::Session) -> anyhow::Result<()> {
+    let creators = crate::data::fanbox::fetch_supporting_list(session).await?;
+    for creator in creators {
+        tracing::info!(
+            "Syncing creator {} ({})",
+            creator
+                .user
+                .as_ref()
+                .map(|e| e.name.as_str())
+                .unwrap_or("?"),
+            creator.creator_id
+        );
+        sync(session, &creator.creator_id).await?;
+    }
+    Ok(())
 }

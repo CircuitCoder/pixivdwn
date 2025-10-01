@@ -2,8 +2,8 @@ mod cmd;
 mod config;
 mod data;
 mod db;
-mod util;
 mod fetch;
+mod util;
 
 use clap::Parser;
 #[derive(Parser)]

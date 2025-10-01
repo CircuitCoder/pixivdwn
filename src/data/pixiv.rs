@@ -373,8 +373,8 @@ async fn get_bookmarks_page(
         pixiv_session.uid,
     );
 
-    let req = |client: &wreq::Client| Ok(
-        client
+    let req = |client: &wreq::Client| {
+        Ok(client
             .get(&url)
             .prepare_with(PixivRequest(session))?
             .query(&[
@@ -384,8 +384,8 @@ async fn get_bookmarks_page(
                 ("rest", if hidden { "hide" } else { "show" }),
                 ("lang", "en"),
             ])
-            .build()?
-        );
+            .build()?)
+    };
     let json: Response<Bookmarks> = crate::fetch::fetch(req).await?;
     json.into_body()
 }
@@ -514,12 +514,12 @@ pub async fn get_bookmarks(
 pub async fn get_illust(session: &Session, illust_id: u64) -> anyhow::Result<Illust> {
     let url = format!("https://www.pixiv.net/ajax/illust/{}", illust_id);
 
-    let req = |client: &wreq::Client| Ok(
-        client
+    let req = |client: &wreq::Client| {
+        Ok(client
             .get(&url)
             .prepare_with(PixivRequest(session))?
-            .build()?
-    );
+            .build()?)
+    };
     let json: Response<FetchWorkDetail> = crate::fetch::fetch(req).await?;
     let detail = json.into_body()?;
     Ok(detail.into())
@@ -528,12 +528,12 @@ pub async fn get_illust(session: &Session, illust_id: u64) -> anyhow::Result<Ill
 pub async fn get_illust_pages(session: &Session, illust_id: u64) -> anyhow::Result<Vec<Page>> {
     let url = format!("https://www.pixiv.net/ajax/illust/{}/pages", illust_id);
 
-    let req = |client: &wreq::Client| Ok(
-        client
+    let req = |client: &wreq::Client| {
+        Ok(client
             .get(&url)
             .prepare_with(PixivRequest(session))?
-            .build()?
-    );
+            .build()?)
+    };
     let json: Response<Vec<Page>> = crate::fetch::fetch(req).await?;
     let pages = json.into_body()?;
     Ok(pages)
@@ -548,12 +548,12 @@ pub async fn get_illust_ugoira_meta(
         illust_id
     );
 
-    let req = |client: &wreq::Client| Ok(
-        client
+    let req = |client: &wreq::Client| {
+        Ok(client
             .get(&url)
             .prepare_with(PixivRequest(session))?
-            .build()?
-    );
+            .build()?)
+    };
     let json: Response<UgoiraMeta> = crate::fetch::fetch(req).await?;
     let meta = json.into_body()?;
     Ok(meta)

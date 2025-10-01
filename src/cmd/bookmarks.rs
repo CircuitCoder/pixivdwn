@@ -3,14 +3,7 @@ use std::collections::HashMap;
 use clap::Args;
 use futures::{StreamExt, pin_mut};
 
-#[derive(clap::ValueEnum, Clone, Copy, PartialEq, Eq)]
-enum TerminationCondition {
-    /// Terminate when an already existing illustration is encountered
-    OnHit,
-
-    /// Terminate until no more illustrations are available
-    UntilEnd,
-}
+use crate::util::TerminationCondition;
 
 #[derive(Args)]
 pub struct Bookmarks {

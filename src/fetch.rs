@@ -1,11 +1,18 @@
+use std::sync::atomic::AtomicI64;
+
 use serde::de::DeserializeOwned;
 
 // Rate-limiter
 type Ctx = (wreq::Client, tokio::time::Instant);
 static CTX: tokio::sync::Mutex<Option<Ctx>> = tokio::sync::Mutex::const_new(None);
 
-const DELAY_MS: i64 = 2500;
-const DELAY_RANDOM_VAR_MS: i64 = 500;
+static DELAY_MS: AtomicI64 = AtomicI64::new(2500);
+static DELAY_RANDOM_VAR_MS: AtomicI64 = AtomicI64::new(500);
+
+pub fn update_delay_settings(base: i64, var: i64) {
+    DELAY_MS.store(base, std::sync::atomic::Ordering::Relaxed);
+    DELAY_RANDOM_VAR_MS.store(var, std::sync::atomic::Ordering::Relaxed);
+}
 
 pub struct FetchCtxGuard<'a> {
     guard: tokio::sync::MutexGuard<'a, Option<Ctx>>,
@@ -34,9 +41,10 @@ impl<'a> FetchCtxGuard<'a> {
 
 impl Drop for FetchCtxGuard<'_> {
     fn drop(&mut self) {
-        let delay = std::time::Duration::from_millis(
-            (DELAY_MS + rand::random_range(-DELAY_RANDOM_VAR_MS..=DELAY_RANDOM_VAR_MS)) as u64,
-        );
+        let var = DELAY_RANDOM_VAR_MS.load(std::sync::atomic::Ordering::Relaxed);
+        let base = DELAY_MS.load(std::sync::atomic::Ordering::Relaxed);
+        let delay =
+            std::time::Duration::from_millis((base + rand::random_range(-var..=var)) as u64);
         self.guard.as_mut().unwrap().1 = tokio::time::Instant::now() + delay;
     }
 }

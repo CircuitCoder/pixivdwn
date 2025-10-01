@@ -52,3 +52,12 @@ pub async fn download_then_persist<R: RequestArgumenter>(
         final_path,
     })
 }
+
+#[derive(clap::ValueEnum, Clone, Copy, PartialEq, Eq)]
+pub enum TerminationCondition {
+    /// Terminate when an already existing illustration is encountered
+    OnHit,
+
+    /// Terminate until no more illustrations are available
+    UntilEnd,
+}

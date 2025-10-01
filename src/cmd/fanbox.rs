@@ -3,7 +3,7 @@ use futures::StreamExt;
 
 use crate::{
     data::fanbox::FanboxRequest,
-    util::{DatabasePathFormat, DownloadResult},
+    util::{DatabasePathFormat, DownloadResult, TerminationCondition},
 };
 
 #[derive(Args)]
@@ -24,6 +24,10 @@ pub enum FanboxCmd {
     Sync {
         /// ID of the Fanbox creator. If not spcified, sync all supported creators
         creator: Option<String>,
+
+        #[arg(alias="term", long, value_enum, default_value_t = TerminationCondition::UntilEnd)]
+        /// Termination condition (alias: --term)
+        termination: TerminationCondition,
     },
 
     /// Download a specific synced file or image
@@ -58,11 +62,14 @@ pub enum FanboxCmd {
 impl Fanbox {
     pub async fn run(self, session: &crate::config::Session) -> anyhow::Result<()> {
         match self.cmd {
-            FanboxCmd::Sync { creator } => {
+            FanboxCmd::Sync {
+                creator,
+                termination,
+            } => {
                 if let Some(creator) = creator {
-                    sync(session, &creator).await?
+                    sync(session, &creator, termination).await?
                 } else {
-                    sync_all(session).await?
+                    sync_all(session, termination).await?
                 }
             }
             FanboxCmd::Download {
@@ -111,7 +118,11 @@ impl Fanbox {
     }
 }
 
-async fn sync(session: &crate::config::Session, creator: &str) -> anyhow::Result<()> {
+async fn sync(
+    session: &crate::config::Session,
+    creator: &str,
+    term: TerminationCondition,
+) -> anyhow::Result<()> {
     let mut posts = Box::pin(crate::data::fanbox::fetch_author_posts(session, creator));
     while let Some(post) = posts.next().await.transpose()? {
         let last_updated = crate::db::query_fanbox_post_updated_datetime(post.id).await?;
@@ -162,6 +173,13 @@ async fn sync(session: &crate::config::Session, creator: &str) -> anyhow::Result
                 }
             }
         }
+
+        if matches!(term, TerminationCondition::OnHit)
+            && matches!(updated, crate::db::FanboxPostUpdateResult::Updated)
+        {
+            tracing::info!("Encountered an already existing post. Terminating.");
+            break;
+        }
     }
     Ok(())
 }
@@ -189,7 +207,10 @@ async fn get_download_spec(ty: FanboxDownloadType, id: &str) -> anyhow::Result<(
     }
 }
 
-async fn sync_all(session: &crate::config::Session) -> anyhow::Result<()> {
+async fn sync_all(
+    session: &crate::config::Session,
+    term: TerminationCondition,
+) -> anyhow::Result<()> {
     let creators = crate::data::fanbox::fetch_supporting_list(session).await?;
     for creator in creators {
         tracing::info!(
@@ -201,7 +222,7 @@ async fn sync_all(session: &crate::config::Session) -> anyhow::Result<()> {
                 .unwrap_or("?"),
             creator.creator_id
         );
-        sync(session, &creator.creator_id).await?;
+        sync(session, &creator.creator_id, term).await?;
     }
     Ok(())
 }

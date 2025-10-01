@@ -25,6 +25,14 @@ struct Args {
     #[arg(long)]
     database_url: Option<String>,
 
+    /// Override fetch delay (ms)
+    #[arg(long, default_value_t = 2500)]
+    fetch_delay: i64,
+
+    /// Override fetch delay random variance (ms)
+    #[arg(long, default_value_t = 500)]
+    fetch_delay_var: i64,
+
     #[command(subcommand)]
     command: cmd::Command,
 }
@@ -34,6 +42,8 @@ async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv()?;
     tracing_subscriber::fmt::init();
     let args = Args::parse();
+
+    fetch::update_delay_settings(args.fetch_delay, args.fetch_delay_var);
 
     let database_url = args.database_url.or_else(|| std::env::var("DATABASE_URL").ok())
         .ok_or_else(|| anyhow::anyhow!("Please specify a database URL via --database-url or the DATABASE_URL environment variable"))?;

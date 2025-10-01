@@ -1,27 +1,8 @@
-use std::{collections::HashSet, io::Read, path::PathBuf};
+use std::{collections::HashSet, io::Read};
 
 use clap::Args;
-use tempfile::NamedTempFile;
 
-use crate::data::pixiv::{IllustType, PixivRequest};
-
-#[derive(clap::ValueEnum, Clone, Copy)]
-enum DatabasePathFormat {
-    /// Only store the path relative to the base.
-    ///
-    /// This make it easier to move the base directory with images inside them.
-    Inline,
-
-    /// Store the path as-is after concating with the base directory,
-    ///
-    /// Not recommended, but may be useful in some cases.
-    AsIs,
-
-    /// Store the absolute path to the image.
-    ///
-    /// Useful if the base directory is often changed, but the image themselves are not moved.
-    Absolute,
-}
+use crate::{data::pixiv::{IllustType, PixivRequest}, util::{DatabasePathFormat, DownloadResult}};
 
 #[derive(clap::ValueEnum, Clone, Copy)]
 enum DownloadType {
@@ -121,7 +102,7 @@ impl Download {
                     );
 
                     if !self.dry_run {
-                        let (written_path, _) = self.download_file(session, url, filename).await?;
+                        let DownloadResult { written_path, .. } = self.download_file(session, url, filename).await?;
                         let written_path = written_path
                             .to_str()
                             .ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?;
@@ -155,7 +136,7 @@ impl Download {
                 );
 
                 if !self.dry_run {
-                    let (written_path, final_path) =
+                    let DownloadResult { written_path, final_path } =
                         self.download_file(session, url, filename).await?;
                     let mut archive = zip::ZipArchive::new(std::fs::File::open(&final_path)?)?;
                     let mut file = archive.by_name(&meta.frames[0].file)?;
@@ -193,29 +174,15 @@ impl Download {
         session: &crate::config::Session,
         url: &str,
         filename: &str,
-    ) -> anyhow::Result<(PathBuf, PathBuf)> {
-        let mut tmp_file = NamedTempFile::with_prefix_in("pixivdwn_", &self.base_dir)?;
-        let mut buffered_file = std::io::BufWriter::new(tmp_file.as_file_mut());
-        crate::data::file::download(
+    ) -> anyhow::Result<DownloadResult> {
+        crate::util::download_then_persist(
             PixivRequest(session),
+            &self.base_dir,
+            filename,
+            self.database_path_format,
             url,
-            &mut buffered_file,
             self.progress,
         )
-        .await?;
-        drop(buffered_file);
-        let mut final_path = PathBuf::from(&self.base_dir);
-        final_path.push(filename);
-
-        tmp_file.persist(&final_path)?;
-        tracing::info!("Saved to {:?}", final_path);
-
-        let written_path = match self.database_path_format {
-            DatabasePathFormat::Inline => PathBuf::from(filename),
-            DatabasePathFormat::AsIs => final_path.clone(),
-            DatabasePathFormat::Absolute => final_path.canonicalize()?,
-        };
-
-        Ok((written_path, final_path))
+        .await
     }
 }

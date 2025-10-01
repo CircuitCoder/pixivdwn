@@ -1,5 +1,6 @@
 use crate::data::{RequestArgumenter, RequestExt};
 use futures::StreamExt;
+use tempfile::NamedTempFile;
 
 pub async fn download<W: std::io::Write, R: RequestArgumenter>(
     req_arg: R,
@@ -50,4 +51,17 @@ pub async fn download<W: std::io::Write, R: RequestArgumenter>(
     }
 
     Ok(())
+}
+
+pub async fn download_to_tmp<R: RequestArgumenter>(
+    req_arg: R,
+    base_dir: &str,
+    url: &str,
+    show_progress: bool,
+) -> anyhow::Result<NamedTempFile> {
+    let mut tmp_file = NamedTempFile::with_prefix_in("pixivdwn_", base_dir)?;
+    let mut buffered_file = std::io::BufWriter::new(tmp_file.as_file_mut());
+    download(req_arg, url, &mut buffered_file, show_progress).await?;
+    drop(buffered_file);
+    Ok(tmp_file)
 }

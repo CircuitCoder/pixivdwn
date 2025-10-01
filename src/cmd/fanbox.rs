@@ -28,6 +28,10 @@ pub enum FanboxCmd {
         #[arg(alias="term", long, value_enum, default_value_t = TerminationCondition::UntilEnd)]
         /// Termination condition (alias: --term)
         termination: TerminationCondition,
+
+        /// Skip pages. Can only be used when `creator` is specified
+        #[arg(long, requires("creator"))]
+        skip_pages: Option<usize>,
     },
 
     /// Download a specific synced file or image
@@ -65,10 +69,12 @@ impl Fanbox {
             FanboxCmd::Sync {
                 creator,
                 termination,
+                skip_pages,
             } => {
                 if let Some(creator) = creator {
-                    sync(session, &creator, termination).await?
+                    sync(session, &creator, termination, skip_pages.unwrap_or(0)).await?
                 } else {
+                    assert!(skip_pages.is_none());
                     sync_all(session, termination).await?
                 }
             }
@@ -122,8 +128,11 @@ async fn sync(
     session: &crate::config::Session,
     creator: &str,
     term: TerminationCondition,
+    skip_pages: usize,
 ) -> anyhow::Result<()> {
-    let mut posts = Box::pin(crate::data::fanbox::fetch_author_posts(session, creator));
+    let mut posts = Box::pin(crate::data::fanbox::fetch_author_posts(
+        session, creator, skip_pages,
+    ));
     while let Some(post) = posts.next().await.transpose()? {
         let last_updated = crate::db::query_fanbox_post_updated_datetime(post.id).await?;
         if let Some(last_updated) = last_updated
@@ -222,7 +231,7 @@ async fn sync_all(
                 .unwrap_or("?"),
             creator.creator_id
         );
-        sync(session, &creator.creator_id, term).await?;
+        sync(session, &creator.creator_id, term, 0).await?;
     }
     Ok(())
 }

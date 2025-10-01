@@ -304,10 +304,16 @@ pub async fn get_author_paginates(
 pub fn fetch_author_posts(
     session: &Session,
     author_id: &str,
+    skip_pages: usize,
 ) -> impl futures::Stream<Item = anyhow::Result<FetchPost>> {
     try_stream! {
         let paginates = get_author_paginates(session, author_id).await?;
         for (page, url) in paginates.iter().enumerate() {
+            if page < skip_pages {
+                tracing::info!("Skipping page {}/{}", page + 1, paginates.len());
+                continue;
+            }
+
             // FIXME: assert url format
             tracing::info!("Fetching page {}/{}", page + 1, paginates.len());
 

@@ -483,8 +483,8 @@ pub async fn update_fanbox_post(
     let post_id = post.id as i64;
     let creator_id = &post.creator_id;
     let title = &post.title;
-    let body = detail.body.text_repr()?;
-    let is_body_rich = detail.body.is_rich();
+    let body = detail.body.as_ref().map(|e| e.text_repr()).transpose()?;
+    let is_body_rich = detail.body.as_ref().map(|e| e.is_rich());
     let fee = post.fee_required as i64;
     let published_datetime = post.published_datetime;
     let updated_datetime = post.updated_datetime;
@@ -504,8 +504,11 @@ pub async fn update_fanbox_post(
                 );
             }
 
-            // TODO: add: also update if previous body is null and current is not null
-            return Ok(FanboxPostUpdateResult::Skipped);
+            if orig.body_null && body.is_some() {
+                // Continue
+            } else {
+                return Ok(FanboxPostUpdateResult::Skipped);
+            }
         }
 
         sqlx::query!(

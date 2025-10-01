@@ -242,7 +242,7 @@ pub struct FetchPostDetail {
     #[serde(flatten)]
     pub post: FetchPost,
 
-    pub body: FetchPostBody,
+    pub body: Option<FetchPostBody>,
 }
 
 pub struct FanboxRequest<'a>(pub &'a Session);

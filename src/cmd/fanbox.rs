@@ -147,17 +147,19 @@ async fn sync(session: &crate::config::Session, creator: &str) -> anyhow::Result
 
         tracing::info!("{} post {} - {}", prompt, id, detail.post.title);
 
-        for (idx, file) in detail.body.files() {
-            let added = crate::db::add_fanbox_file(detail.post.id, idx, file).await?;
-            if added {
-                tracing::info!("  Added {}: file {} - {}", idx, file.id, file.name);
+        if let Some(ref body) = detail.body {
+            for (idx, file) in body.files() {
+                let added = crate::db::add_fanbox_file(detail.post.id, idx, file).await?;
+                if added {
+                    tracing::info!("  Added {}: file {} - {}", idx, file.id, file.name);
+                }
             }
-        }
 
-        for (idx, image) in detail.body.images() {
-            let added = crate::db::add_fanbox_image(detail.post.id, idx, image).await?;
-            if added {
-                tracing::info!("  Added {}: image {}", idx, image.id);
+            for (idx, image) in body.images() {
+                let added = crate::db::add_fanbox_image(detail.post.id, idx, image).await?;
+                if added {
+                    tracing::info!("  Added {}: image {}", idx, image.id);
+                }
             }
         }
     }

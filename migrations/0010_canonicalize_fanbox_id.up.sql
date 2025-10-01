@@ -22,7 +22,10 @@ CREATE TABLE fanbox_posts (
     published_datetime TEXT NOT NULL,
     updated_datetime TEXT NOT NULL,
 
-    fetched_at TEXT NOT NULL
+    fetched_at TEXT NOT NULL,
+
+    -- body and is_body_rich should be both NULL or NOT NULL
+    CHECK ((body IS NULL AND is_body_rich IS NULL) OR (body IS NOT NULL AND is_body_rich IS NOT NULL))
 );
 
 CREATE TABLE fanbox_images (

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::Serialize;
 use sqlx::{
     SqlitePool,
-    migrate::{Migrator, Migrate},
+    migrate::{Migrate, Migrator},
     sqlite::{SqliteConnectOptions, SqliteRow},
 };
 use tokio::sync::OnceCell;
@@ -37,18 +37,29 @@ async fn get_db() -> anyhow::Result<&'static sqlx::SqlitePool> {
 
             let mut conn = db.acquire().await?;
             conn.ensure_migrations_table().await?;
-            let applied_migrations: HashMap<_, _> = conn.list_applied_migrations().await?
-                .into_iter().map(|e| (e.version, e.checksum)).collect();
+            let applied_migrations: HashMap<_, _> = conn
+                .list_applied_migrations()
+                .await?
+                .into_iter()
+                .map(|e| (e.version, e.checksum))
+                .collect();
             for migration in MIGRATOR.iter() {
                 if migration.migration_type.is_down_migration() {
                     continue;
                 }
                 match applied_migrations.get(&migration.version) {
-                    None => return Err(anyhow::anyhow!("Database migration pending, please run `pixivdwn database setup`")),
-                    Some(checksum) if checksum != &migration.checksum => {
-                        return Err(anyhow::anyhow!("Database migration version {} checksum mismatch, possible corruption", migration.version));
+                    None => {
+                        return Err(anyhow::anyhow!(
+                            "Database migration pending, please run `pixivdwn database setup`"
+                        ));
                     }
-                    _ => {},
+                    Some(checksum) if checksum != &migration.checksum => {
+                        return Err(anyhow::anyhow!(
+                            "Database migration version {} checksum mismatch, possible corruption",
+                            migration.version
+                        ));
+                    }
+                    _ => {}
                 }
             }
 
@@ -478,20 +489,22 @@ pub async fn update_fanbox_post(
     let published_datetime = post.published_datetime;
     let updated_datetime = post.updated_datetime;
 
-    let orig = sqlx::query!(r#"SELECT id, updated_datetime as "updated_datetime: chrono::DateTime<chrono::Utc>" FROM fanbox_posts WHERE id = ?"#, post_id)
+    let orig = sqlx::query!(r#"SELECT id, updated_datetime as "updated_datetime: chrono::DateTime<chrono::Utc>", body IS NULL as "body_null: bool" FROM fanbox_posts WHERE id = ?"#, post_id)
         .fetch_optional(db)
         .await?;
 
     if let Some(orig) = orig {
-        if orig.updated_datetime == updated_datetime {
-            return Ok(FanboxPostUpdateResult::Skipped);
-        } else if orig.updated_datetime > updated_datetime {
-            tracing::warn!(
-                "Post {} updated_datetime went backwards: was {}, now {}",
-                post_id,
-                orig.updated_datetime,
-                updated_datetime
-            );
+        if orig.updated_datetime >= updated_datetime {
+            if orig.updated_datetime > updated_datetime {
+                tracing::warn!(
+                    "Post {} updated_datetime went backwards: was {}, now {}",
+                    post_id,
+                    orig.updated_datetime,
+                    updated_datetime
+                );
+            }
+
+            // TODO: add: also update if previous body is null and current is not null
             return Ok(FanboxPostUpdateResult::Skipped);
         }
 

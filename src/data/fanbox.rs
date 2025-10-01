@@ -165,7 +165,11 @@ impl TryFrom<FetchPostBodyRichRaw> for FetchPostBodyRich {
             });
         }
 
-        tracing::debug!("Conversion successful: images: {:#?}, files: {:#?}", images, files);
+        tracing::debug!(
+            "Conversion successful: images: {:#?}, files: {:#?}",
+            images,
+            files
+        );
 
         Ok(Self {
             blocks: raw.blocks,

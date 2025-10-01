@@ -52,16 +52,31 @@ pub struct FetchPost {
 }
 
 #[derive(Deserialize, Serialize, Debug)]
-#[serde(tag = "type", rename_all = "lowercase")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum FetchPostBlock {
     #[serde(rename = "p")]
-    Paragraph { text: String },
+    Paragraph {
+        text: String,
+    },
+
+    Header {
+        text: String,
+    },
 
     #[serde(rename_all = "camelCase")]
-    File { file_id: String },
+    File {
+        file_id: String,
+    },
 
     #[serde(rename_all = "camelCase")]
-    Image { image_id: String },
+    Image {
+        image_id: String,
+    },
+
+    #[serde(rename_all = "camelCase")]
+    UrlEmbed {
+        url_embed_id: String,
+    },
 }
 
 #[derive(Deserialize, Debug)]
@@ -88,12 +103,20 @@ pub struct FetchPostFile {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+pub struct FetchPostUrlEmbed {
+    pub id: String,
+    pub r#type: String,
+    pub html: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct FetchPostBodyRichRaw {
     pub blocks: Vec<FetchPostBlock>,
     pub image_map: HashMap<String, FetchPostImage>,
     pub file_map: HashMap<String, FetchPostFile>,
     pub embed_map: HashMap<String, serde_json::Value>,
-    pub url_embed_map: HashMap<String, serde_json::Value>,
+    pub url_embed_map: HashMap<String, FetchPostUrlEmbed>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -106,7 +129,7 @@ pub struct FetchPostBodyRich {
     #[allow(unused)]
     pub embeds: Vec<(usize, serde_json::Value)>,
     #[allow(unused)]
-    pub url_embeds: Vec<(usize, serde_json::Value)>,
+    pub url_embeds: Vec<(usize, FetchPostUrlEmbed)>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -115,6 +138,8 @@ pub enum FetchPostBodyConversionError {
     UnmatchedImageId(String),
     #[error("Unmatched file ID: {0}")]
     UnmatchedFileId(String),
+    #[error("Unmatched url_embed ID: {0}")]
+    UnmatchedUrlEmbedId(String),
     #[error(
         "Extra unmapped items exist: image: {image:?} file: {file:?} embed: {embed:?} url_embed: {url_embed:?}"
     )]
@@ -133,6 +158,7 @@ impl TryFrom<FetchPostBodyRichRaw> for FetchPostBodyRich {
         tracing::debug!("Converting rich body: {:#?}", raw);
         let mut images = Vec::new();
         let mut files = Vec::new();
+        let mut url_embeds = Vec::new();
 
         for (idx, block) in raw.blocks.iter().enumerate() {
             match block {
@@ -147,6 +173,12 @@ impl TryFrom<FetchPostBodyRichRaw> for FetchPostBodyRich {
                         FetchPostBodyConversionError::UnmatchedFileId(file_id.clone())
                     })?;
                     files.push((idx, inner));
+                }
+                FetchPostBlock::UrlEmbed { url_embed_id } => {
+                    let inner = raw.url_embed_map.remove(url_embed_id).ok_or_else(|| {
+                        FetchPostBodyConversionError::UnmatchedUrlEmbedId(url_embed_id.clone())
+                    })?;
+                    url_embeds.push((idx, inner));
                 }
                 _ => {}
             }
@@ -176,7 +208,7 @@ impl TryFrom<FetchPostBodyRichRaw> for FetchPostBodyRich {
             images,
             files,
             embeds: Vec::new(),
-            url_embeds: Vec::new(),
+            url_embeds,
         })
     }
 }

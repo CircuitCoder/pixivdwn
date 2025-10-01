@@ -45,13 +45,11 @@ pub struct FanboxSyncArgs {
 }
 
 impl FanboxSyncArgs {
-    async fn sync(
-        &self,
-        session: &crate::config::Session,
-        creator: &str,
-    ) -> anyhow::Result<()> {
+    async fn sync(&self, session: &crate::config::Session, creator: &str) -> anyhow::Result<()> {
         let mut posts = Box::pin(crate::data::fanbox::fetch_author_posts(
-            session, creator, self.skip_pages.unwrap_or(0),
+            session,
+            creator,
+            self.skip_pages.unwrap_or(0),
         ));
         'post: while let Some(post) = posts.next().await.transpose()? {
             let last_updated = crate::db::query_fanbox_post_updated_datetime(post.id).await?;
@@ -83,7 +81,11 @@ impl FanboxSyncArgs {
                     Err(e) => {
                         tracing::warn!("Failed to fetch post {}: {}", id, e);
                         if tries == self.retries {
-                            tracing::error!("Failed to fetch post {} after {} tries", id, 1 + self.retries);
+                            tracing::error!(
+                                "Failed to fetch post {} after {} tries",
+                                id,
+                                1 + self.retries
+                            );
 
                             if !self.skip_failed {
                                 return Err(e);
@@ -137,10 +139,7 @@ impl FanboxSyncArgs {
         Ok(())
     }
 
-    async fn sync_all(
-        &self,
-        session: &crate::config::Session,
-    ) -> anyhow::Result<()> {
+    async fn sync_all(&self, session: &crate::config::Session) -> anyhow::Result<()> {
         let creators = crate::data::fanbox::fetch_supporting_list(session).await?;
         for creator in creators {
             tracing::info!(

@@ -52,25 +52,22 @@ impl FanboxSyncArgs {
             self.skip_pages.unwrap_or(0),
         ));
         'post: while let Some(post) = posts.next().await.transpose()? {
-            let last_updated = crate::db::query_fanbox_post_updated_datetime(post.id).await?;
-            if let Some(last_updated) = last_updated
-                && last_updated >= post.updated_datetime
+            let orig = crate::db::query_fanbox_post_status(post.id).await?;
+            if let Some(orig) = orig
+                && !orig.needs_update(&post)
             {
-                if last_updated > post.updated_datetime {
-                    tracing::warn!(
-                        "Post {} updated_datetime went backwards: was {}, now {}",
-                        post.id,
-                        last_updated,
-                        post.updated_datetime
-                    );
+                tracing::info!(
+                    "Post {} not updated since last fetch at {}, skipping",
+                    post.id,
+                    orig.updated_datetime
+                );
+
+                if matches!(self.termination, TerminationCondition::OnHit) {
+                    tracing::info!("Encountered an already existing post. Terminating.");
+                    break;
                 } else {
-                    tracing::info!(
-                        "Post {} not updated since last fetch at {}, skipping",
-                        post.id,
-                        last_updated
-                    );
+                    continue;
                 }
-                continue;
             }
 
             let id = post.id;
@@ -127,13 +124,6 @@ impl FanboxSyncArgs {
                         tracing::info!("  Added {}: image {}", idx, image.id);
                     }
                 }
-            }
-
-            if matches!(self.termination, TerminationCondition::OnHit)
-                && matches!(updated, crate::db::FanboxPostUpdateResult::Updated)
-            {
-                tracing::info!("Encountered an already existing post. Terminating.");
-                break;
             }
         }
         Ok(())

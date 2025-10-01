@@ -8,7 +8,10 @@ use sqlx::{
 };
 use tokio::sync::OnceCell;
 
-use crate::data::pixiv::{IllustBookmarkTags, IllustState, UgoiraFrame};
+use crate::data::{
+    fanbox,
+    pixiv::{IllustBookmarkTags, IllustState, UgoiraFrame},
+};
 
 static DB: OnceCell<sqlx::SqlitePool> = OnceCell::const_new();
 static DBURL: OnceCell<String> = OnceCell::const_new();
@@ -489,26 +492,10 @@ pub async fn update_fanbox_post(
     let published_datetime = post.published_datetime;
     let updated_datetime = post.updated_datetime;
 
-    let orig = sqlx::query!(r#"SELECT id, updated_datetime as "updated_datetime: chrono::DateTime<chrono::Utc>", body IS NULL as "body_null: bool" FROM fanbox_posts WHERE id = ?"#, post_id)
-        .fetch_optional(db)
-        .await?;
-
+    let orig = query_fanbox_post_status(post.id).await?;
     if let Some(orig) = orig {
-        if orig.updated_datetime >= updated_datetime {
-            if orig.updated_datetime > updated_datetime {
-                tracing::warn!(
-                    "Post {} updated_datetime went backwards: was {}, now {}",
-                    post_id,
-                    orig.updated_datetime,
-                    updated_datetime
-                );
-            }
-
-            if orig.body_null && body.is_some() {
-                // Continue
-            } else {
-                return Ok(FanboxPostUpdateResult::Skipped);
-            }
+        if !orig.needs_update(&post) {
+            return Ok(FanboxPostUpdateResult::Skipped);
         }
 
         sqlx::query!(
@@ -564,15 +551,40 @@ pub async fn update_fanbox_post(
     }
 }
 
-pub async fn query_fanbox_post_updated_datetime(
-    post_id: u64,
-) -> anyhow::Result<Option<chrono::DateTime<chrono::Utc>>> {
+pub struct FanboxPostStatus {
+    pub updated_datetime: chrono::DateTime<chrono::Utc>,
+    pub body_null: bool,
+}
+
+impl FanboxPostStatus {
+    pub fn needs_update(&self, new: &fanbox::FetchPost) -> bool {
+        if self.body_null && !new.is_restricted {
+            return true;
+        }
+        if !self.body_null && new.is_restricted {
+            return false;
+        }
+
+        if self.updated_datetime > new.updated_datetime {
+            tracing::warn!(
+                "Post {} updated_datetime went backwards: was {}, now {}",
+                new.id,
+                self.updated_datetime,
+                new.updated_datetime,
+            );
+        }
+
+        self.updated_datetime < new.updated_datetime
+    }
+}
+
+pub async fn query_fanbox_post_status(post_id: u64) -> anyhow::Result<Option<FanboxPostStatus>> {
     let db = get_db().await?;
     let post_id = post_id as i64;
-    let rec = sqlx::query!(r#"SELECT updated_datetime as "updated_datetime: chrono::DateTime<chrono::Utc>" FROM fanbox_posts WHERE id = ?"#, post_id)
+    let rec = sqlx::query_as!(FanboxPostStatus, r#"SELECT updated_datetime as "updated_datetime: chrono::DateTime<chrono::Utc>", body IS NULL as "body_null: bool" FROM fanbox_posts WHERE id = ?"#, post_id)
         .fetch_optional(db)
         .await?;
-    Ok(rec.map(|r| r.updated_datetime))
+    Ok(rec)
 }
 
 pub async fn add_fanbox_image(

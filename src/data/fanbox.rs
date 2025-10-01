@@ -76,6 +76,9 @@ pub enum FetchPostBlock {
     #[serde(rename_all = "camelCase")]
     UrlEmbed {
         url_embed_id: String,
+
+        #[serde(skip_deserializing)]
+        content: Option<FetchPostUrlEmbed>,
     },
 }
 
@@ -101,9 +104,10 @@ pub struct FetchPostFile {
     pub url: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct FetchPostUrlEmbed {
+    #[serde(skip_serializing)]
     pub id: String,
     pub r#type: String,
     pub html: String,
@@ -125,11 +129,6 @@ pub struct FetchPostBodyRich {
     pub blocks: Vec<FetchPostBlock>,
     pub images: Vec<(usize, FetchPostImage)>,
     pub files: Vec<(usize, FetchPostFile)>,
-
-    #[allow(unused)]
-    pub embeds: Vec<(usize, serde_json::Value)>,
-    #[allow(unused)]
-    pub url_embeds: Vec<(usize, FetchPostUrlEmbed)>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -158,9 +157,8 @@ impl TryFrom<FetchPostBodyRichRaw> for FetchPostBodyRich {
         tracing::debug!("Converting rich body: {:#?}", raw);
         let mut images = Vec::new();
         let mut files = Vec::new();
-        let mut url_embeds = Vec::new();
 
-        for (idx, block) in raw.blocks.iter().enumerate() {
+        for (idx, block) in raw.blocks.iter_mut().enumerate() {
             match block {
                 FetchPostBlock::Image { image_id } => {
                     let inner = raw.image_map.remove(image_id).ok_or_else(|| {
@@ -174,11 +172,14 @@ impl TryFrom<FetchPostBodyRichRaw> for FetchPostBodyRich {
                     })?;
                     files.push((idx, inner));
                 }
-                FetchPostBlock::UrlEmbed { url_embed_id } => {
+                FetchPostBlock::UrlEmbed {
+                    url_embed_id,
+                    content,
+                } => {
                     let inner = raw.url_embed_map.remove(url_embed_id).ok_or_else(|| {
                         FetchPostBodyConversionError::UnmatchedUrlEmbedId(url_embed_id.clone())
                     })?;
-                    url_embeds.push((idx, inner));
+                    *content = Some(inner);
                 }
                 _ => {}
             }
@@ -207,8 +208,6 @@ impl TryFrom<FetchPostBodyRichRaw> for FetchPostBodyRich {
             blocks: raw.blocks,
             images,
             files,
-            embeds: Vec::new(),
-            url_embeds,
         })
     }
 }

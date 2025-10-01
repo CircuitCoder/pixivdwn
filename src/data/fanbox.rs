@@ -85,11 +85,15 @@ pub enum FetchPostBlock {
     },
 
     #[serde(rename_all = "camelCase")]
+    Embed {
+        embed_id: String,
+        content: Option<serde_json::Value>,
+    },
+
+    #[serde(rename_all = "camelCase")]
     UrlEmbed {
         url_embed_id: String,
-
-        #[serde(skip_deserializing)]
-        content: Option<FetchPostUrlEmbed>,
+        content: Option<serde_json::Value>,
     },
 }
 
@@ -115,16 +119,6 @@ pub struct FetchPostFile {
     pub url: String,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct FetchPostUrlEmbed {
-    #[serde(skip_serializing)]
-    #[expect(unused)]
-    pub id: String,
-    pub r#type: String,
-    pub html: String,
-}
-
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct FetchPostBodyRichRaw {
@@ -132,7 +126,7 @@ pub struct FetchPostBodyRichRaw {
     pub image_map: HashMap<String, FetchPostImage>,
     pub file_map: HashMap<String, FetchPostFile>,
     pub embed_map: HashMap<String, serde_json::Value>,
-    pub url_embed_map: HashMap<String, FetchPostUrlEmbed>,
+    pub url_embed_map: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -149,6 +143,8 @@ pub enum FetchPostBodyConversionError {
     UnmatchedImageId(String),
     #[error("Unmatched file ID: {0}")]
     UnmatchedFileId(String),
+    #[error("Unmatched embed ID: {0}")]
+    UnmatchedEmbedId(String),
     #[error("Unmatched url_embed ID: {0}")]
     UnmatchedUrlEmbedId(String),
     #[error(
@@ -184,6 +180,13 @@ impl TryFrom<FetchPostBodyRichRaw> for FetchPostBodyRich {
                     })?;
                     files.push((idx, inner));
                 }
+                FetchPostBlock::Embed { embed_id, content } => {
+                    let inner = raw.embed_map.remove(embed_id).ok_or_else(|| {
+                        FetchPostBodyConversionError::UnmatchedEmbedId(embed_id.clone())
+                    })?;
+                    assert!(content.is_none());
+                    *content = Some(inner);
+                }
                 FetchPostBlock::UrlEmbed {
                     url_embed_id,
                     content,
@@ -191,6 +194,7 @@ impl TryFrom<FetchPostBodyRichRaw> for FetchPostBodyRich {
                     let inner = raw.url_embed_map.remove(url_embed_id).ok_or_else(|| {
                         FetchPostBodyConversionError::UnmatchedUrlEmbedId(url_embed_id.clone())
                     })?;
+                    assert!(content.is_none());
                     *content = Some(inner);
                 }
                 _ => {}

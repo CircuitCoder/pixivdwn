@@ -284,15 +284,10 @@ pub async fn get_author_paginates(
         author_id
     );
 
-    let client = wreq::Client::new();
-    let req = client
-        .get(&url)
-        .prepare_with(FanboxRequest(session))?
-        .build()?;
-    let resp = client.execute(req).await?;
-    let text = resp.text().await?;
-    tracing::debug!("Fanbox paginate response: {}", text);
-    let json: Response<Vec<String>> = serde_json::from_str(&text)?;
+    let json: Response<Vec<String>> = crate::fetch::fetch(|client|
+        Ok(client.get(&url).prepare_with(FanboxRequest(session))?.build()?)
+    ).await?;
+
     json.into_body()
 }
 
@@ -300,27 +295,18 @@ pub fn fetch_author_posts(
     session: &Session,
     author_id: &str,
 ) -> impl futures::Stream<Item = anyhow::Result<FetchPost>> {
-    const DELAY_MS: i64 = 2500;
-    const DELAY_RANDOM_VAR_MS: i64 = 500;
-
     try_stream! {
         let paginates = get_author_paginates(session, author_id).await?;
         for page_url in paginates {
             // FIXME: assert page_url format
             tracing::info!("Fetching: {}", page_url);
 
-            let client = wreq::Client::new();
-            let req = client.get(&page_url)
-                .prepare_with(FanboxRequest(session))?
-                .build()?;
-            let resp = client.execute(req).await?;
-            let posts: Response<Vec<FetchPost>> = resp.json().await?;
+            let posts: Response<Vec<FetchPost>> = crate::fetch::fetch(|client| {
+                Ok(client.get(&page_url).prepare_with(FanboxRequest(session))?.build()?)
+            }).await?;
             for post in posts.into_body()? {
                 yield post;
             }
-
-            let delay = std::time::Duration::from_millis((DELAY_MS + rand::random_range(-DELAY_RANDOM_VAR_MS..=DELAY_RANDOM_VAR_MS)) as u64);
-            tokio::time::sleep(delay).await;
         }
     }
 }
@@ -328,14 +314,8 @@ pub fn fetch_author_posts(
 pub async fn fetch_post(session: &Session, post_id: u64) -> anyhow::Result<FetchPostDetail> {
     let url = format!("https://api.fanbox.cc/post.info?postId={}", post_id);
 
-    let client = wreq::Client::new();
-    let req = client
-        .get(&url)
-        .prepare_with(FanboxRequest(session))?
-        .build()?;
-    let resp = client.execute(req).await?;
-    let text = resp.text().await?;
-    tracing::debug!("Fanbox post response: {}", text);
-    let json: Response<FetchPostDetail> = serde_json::from_str(&text)?;
+    let json: Response<FetchPostDetail> = crate::fetch::fetch(|client| {
+        Ok(client.get(&url).prepare_with(FanboxRequest(session))?.build()?)
+    }).await?;
     json.into_body()
 }

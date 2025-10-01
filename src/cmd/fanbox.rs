@@ -108,9 +108,6 @@ impl Fanbox {
 }
 
 async fn sync(session: &crate::config::Session, creator: &str) -> anyhow::Result<()> {
-    const DELAY_MS: i64 = 2500;
-    const DELAY_RANDOM_VAR_MS: i64 = 500;
-
     let mut posts = Box::pin(crate::data::fanbox::fetch_author_posts(session, creator));
     while let Some(post) = posts.next().await.transpose()? {
         let last_updated = crate::db::query_fanbox_post_updated_datetime(post.id).await?;
@@ -134,12 +131,7 @@ async fn sync(session: &crate::config::Session, creator: &str) -> anyhow::Result
             continue;
         }
 
-        let delay = std::time::Duration::from_millis(
-            (DELAY_MS + rand::random_range(-DELAY_RANDOM_VAR_MS..=DELAY_RANDOM_VAR_MS)) as u64,
-        );
         let id = post.id;
-        tokio::time::sleep(delay).await;
-
         let detail = crate::data::fanbox::fetch_post(session, id).await?;
 
         let updated = crate::db::update_fanbox_post(&detail).await?;

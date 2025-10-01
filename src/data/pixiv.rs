@@ -373,20 +373,20 @@ async fn get_bookmarks_page(
         pixiv_session.uid,
     );
 
-    let client = wreq::Client::new();
-    let req = client
-        .get(&url)
-        .prepare_with(PixivRequest(session))?
-        .query(&[
-            ("tag", tag.unwrap_or("")),
-            ("offset", offset.to_string().as_str()),
-            ("limit", limit.to_string().as_str()),
-            ("rest", if hidden { "hide" } else { "show" }),
-            ("lang", "en"),
-        ])
-        .build()?;
-    let resp = client.execute(req).await?;
-    let json: Response<Bookmarks> = resp.json().await?;
+    let req = |client: &wreq::Client| Ok(
+        client
+            .get(&url)
+            .prepare_with(PixivRequest(session))?
+            .query(&[
+                ("tag", tag.unwrap_or("")),
+                ("offset", offset.to_string().as_str()),
+                ("limit", limit.to_string().as_str()),
+                ("rest", if hidden { "hide" } else { "show" }),
+                ("lang", "en"),
+            ])
+            .build()?
+        );
+    let json: Response<Bookmarks> = crate::fetch::fetch(req).await?;
     json.into_body()
 }
 
@@ -486,8 +486,6 @@ pub async fn get_bookmarks(
     hidden: bool,
 ) -> impl futures::Stream<Item = anyhow::Result<Illust>> {
     const LIMIT: usize = 48;
-    const DELAY_MS: i64 = 2500;
-    const DELAY_RANDOM_VAR_MS: i64 = 500;
 
     try_stream! {
         loop {
@@ -508,9 +506,7 @@ pub async fn get_bookmarks(
                 break;
             }
 
-            let delay = std::time::Duration::from_millis((DELAY_MS + rand::random_range(-DELAY_RANDOM_VAR_MS..=DELAY_RANDOM_VAR_MS)) as u64);
-            tracing::info!("Fetched {}/{} bookmarks, sleeping for {:?}...", offset, total, delay);
-            tokio::time::sleep(delay).await;
+            tracing::info!("Fetched {}/{} bookmarks", offset, total);
         }
     }
 }
@@ -518,13 +514,13 @@ pub async fn get_bookmarks(
 pub async fn get_illust(session: &Session, illust_id: u64) -> anyhow::Result<Illust> {
     let url = format!("https://www.pixiv.net/ajax/illust/{}", illust_id);
 
-    let client = wreq::Client::new();
-    let req = client
-        .get(&url)
-        .prepare_with(PixivRequest(session))?
-        .build()?;
-    let resp = client.execute(req).await?;
-    let json: Response<FetchWorkDetail> = resp.json().await?;
+    let req = |client: &wreq::Client| Ok(
+        client
+            .get(&url)
+            .prepare_with(PixivRequest(session))?
+            .build()?
+    );
+    let json: Response<FetchWorkDetail> = crate::fetch::fetch(req).await?;
     let detail = json.into_body()?;
     Ok(detail.into())
 }
@@ -532,13 +528,13 @@ pub async fn get_illust(session: &Session, illust_id: u64) -> anyhow::Result<Ill
 pub async fn get_illust_pages(session: &Session, illust_id: u64) -> anyhow::Result<Vec<Page>> {
     let url = format!("https://www.pixiv.net/ajax/illust/{}/pages", illust_id);
 
-    let client = wreq::Client::new();
-    let req = client
-        .get(&url)
-        .prepare_with(PixivRequest(session))?
-        .build()?;
-    let resp = client.execute(req).await?;
-    let json: Response<Vec<Page>> = resp.json().await?;
+    let req = |client: &wreq::Client| Ok(
+        client
+            .get(&url)
+            .prepare_with(PixivRequest(session))?
+            .build()?
+    );
+    let json: Response<Vec<Page>> = crate::fetch::fetch(req).await?;
     let pages = json.into_body()?;
     Ok(pages)
 }
@@ -552,13 +548,13 @@ pub async fn get_illust_ugoira_meta(
         illust_id
     );
 
-    let client = wreq::Client::new();
-    let req = client
-        .get(&url)
-        .prepare_with(PixivRequest(session))?
-        .build()?;
-    let resp = client.execute(req).await?;
-    let json: Response<UgoiraMeta> = resp.json().await?;
+    let req = |client: &wreq::Client| Ok(
+        client
+            .get(&url)
+            .prepare_with(PixivRequest(session))?
+            .build()?
+    );
+    let json: Response<UgoiraMeta> = crate::fetch::fetch(req).await?;
     let meta = json.into_body()?;
     Ok(meta)
 }

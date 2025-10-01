@@ -16,6 +16,8 @@ struct Args {
     /// Can also be set via the FANBOX_COOKIE environment variable
     fanbox_cookie: Option<String>,
 
+    /// Full Fanbox cookie, including other fields such as Cloudflare tokens
+    /// Overrides `fanbox_cookie` if both are set
     fanbox_cookie_full: Option<String>,
 
     /// Database URL, Can also be set via the DATABASE_URL environment variable

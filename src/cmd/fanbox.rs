@@ -48,7 +48,7 @@ impl Fanbox {
                     "{}_{}_{}_{}.{}",
                     spec.post_id, spec.idx, id, spec.name, spec.ext
                 );
-                // Let's get a quick hack
+                // FIXME: Let's get a quick hack
                 let final_path = std::path::Path::new(&self.base_dir).join(&filename);
                 tracing::info!("Downloading file {} to {}", id, final_path.display());
                 if final_path.exists() {
@@ -149,14 +149,14 @@ async fn sync_creator(session: &crate::config::Session, creator: &str) -> anyhow
         for (idx, file) in detail.body.files() {
             let added = crate::db::add_fanbox_file(detail.post.id, idx, file).await?;
             if added {
-                tracing::info!("| Added {}: file {} - {}", idx, file.id, file.name);
+                tracing::info!("  Added {}: file {} - {}", idx, file.id, file.name);
             }
         }
 
         for (idx, image) in detail.body.images() {
             let added = crate::db::add_fanbox_image(detail.post.id, idx, image).await?;
             if added {
-                tracing::info!("| Added {}: image {}", idx, image.id);
+                tracing::info!("  Added {}: image {}", idx, image.id);
             }
         }
     }

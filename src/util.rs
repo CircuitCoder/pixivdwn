@@ -33,12 +33,8 @@ pub async fn download_then_persist<R: RequestArgumenter>(
     url: &str,
     show_progress: bool,
 ) -> anyhow::Result<DownloadResult> {
-    let tmp_file = crate::data::file::download_to_tmp(
-        req_arg,
-        base_dir,
-        url,
-        show_progress,
-    ).await?;
+    let tmp_file =
+        crate::data::file::download_to_tmp(req_arg, base_dir, url, show_progress).await?;
 
     let mut final_path = PathBuf::from(base_dir);
     final_path.push(filename);
@@ -51,5 +47,8 @@ pub async fn download_then_persist<R: RequestArgumenter>(
         DatabasePathFormat::Absolute => final_path.canonicalize()?,
     };
 
-    Ok(DownloadResult { written_path, final_path })
+    Ok(DownloadResult {
+        written_path,
+        final_path,
+    })
 }

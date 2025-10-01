@@ -2,7 +2,10 @@ use std::{collections::HashSet, io::Read};
 
 use clap::Args;
 
-use crate::{data::pixiv::{IllustType, PixivRequest}, util::{DatabasePathFormat, DownloadResult}};
+use crate::{
+    data::pixiv::{IllustType, PixivRequest},
+    util::{DatabasePathFormat, DownloadResult},
+};
 
 #[derive(clap::ValueEnum, Clone, Copy)]
 enum DownloadType {
@@ -102,7 +105,8 @@ impl Download {
                     );
 
                     if !self.dry_run {
-                        let DownloadResult { written_path, .. } = self.download_file(session, url, filename).await?;
+                        let DownloadResult { written_path, .. } =
+                            self.download_file(session, url, filename).await?;
                         let written_path = written_path
                             .to_str()
                             .ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?;
@@ -136,8 +140,10 @@ impl Download {
                 );
 
                 if !self.dry_run {
-                    let DownloadResult { written_path, final_path } =
-                        self.download_file(session, url, filename).await?;
+                    let DownloadResult {
+                        written_path,
+                        final_path,
+                    } = self.download_file(session, url, filename).await?;
                     let mut archive = zip::ZipArchive::new(std::fs::File::open(&final_path)?)?;
                     let mut file = archive.by_name(&meta.frames[0].file)?;
                     let mut file_content = Vec::new();

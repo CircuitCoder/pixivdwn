@@ -130,6 +130,7 @@ impl TryFrom<FetchPostBodyRichRaw> for FetchPostBodyRich {
     type Error = FetchPostBodyConversionError;
 
     fn try_from(mut raw: FetchPostBodyRichRaw) -> Result<Self, Self::Error> {
+        tracing::debug!("Converting rich body: {:#?}", raw);
         let mut images = Vec::new();
         let mut files = Vec::new();
 
@@ -151,18 +152,20 @@ impl TryFrom<FetchPostBodyRichRaw> for FetchPostBodyRich {
             }
         }
 
-        let extra_embed = raw.embed_map.len() == 0;
-        let extra_url_embed = raw.url_embed_map.len() == 0;
-        let extra_image = raw.image_map.len() == 0;
-        let extra_file = raw.file_map.len() == 0;
+        let extra_embed = raw.embed_map.len() != 0;
+        let extra_url_embed = raw.url_embed_map.len() != 0;
+        let extra_image = raw.image_map.len() != 0;
+        let extra_file = raw.file_map.len() != 0;
         if extra_embed || extra_url_embed || extra_image || extra_file {
             return Err(FetchPostBodyConversionError::Extra {
-                embed: !extra_embed,
-                url_embed: !extra_url_embed,
-                image: !extra_image,
-                file: !extra_file,
+                embed: extra_embed,
+                url_embed: extra_url_embed,
+                image: extra_image,
+                file: extra_file,
             });
         }
+
+        tracing::debug!("Conversion successful: images: {:#?}, files: {:#?}", images, files);
 
         Ok(Self {
             blocks: raw.blocks,

@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::{io::{BufRead, Read}, path::{Path, PathBuf}, str::FromStr};
 
 use crate::data::RequestArgumenter;
 
@@ -83,4 +83,19 @@ pub fn get_image_dim(
     let image = image::ImageReader::with_format(file_content, image_fmt);
     let (width, height) = image.into_dimensions()?;
     Ok((width, height))
+}
+
+pub fn read_spec<T: FromStr>(src: &str) -> anyhow::Result<impl Iterator<Item = anyhow::Result<T>>> {
+    let reader: Box<dyn Read> = if src == "-" {
+        Box::new(std::io::stdin())
+    } else {
+        Box::new(std::fs::File::open(src)?)
+    };
+    let buf_reader = std::io::BufReader::new(reader);
+    Ok(buf_reader.lines().map(|line| {
+        let line = line?;
+        line.parse::<T>().map_err(|_| {
+            anyhow::anyhow!("Failed to parse line: {}", line)
+        })
+    }))
 }

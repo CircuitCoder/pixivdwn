@@ -17,9 +17,21 @@ enum DownloadType {
 }
 
 #[derive(Args)]
-pub struct Download {
+#[group(multiple = false, required = true)]
+pub struct DownloadIdSrc {
     /// Illustration ID
-    id: u64,
+    pub id: Option<Vec<u64>>,
+
+    /// Reading illustration IDs from a file (`-` for STDIN)
+    #[arg(short, long)]
+    pub list: Option<String>,
+}
+
+#[derive(Args)]
+pub struct Download {
+    /// Illustration ID or IDs
+    #[clap(flatten)]
+    pub id: DownloadIdSrc,
 
     /// Dry run, only fech and print the info
     #[arg(long)]
@@ -54,15 +66,34 @@ pub struct Download {
 
 impl Download {
     pub async fn run(self, session: &crate::config::Session) -> anyhow::Result<()> {
+        assert!(self.id.id.is_some() ^ self.id.list.is_some());
+        if let Some(ref ids) = self.id.id {
+            for id in ids {
+                self.single(*id, session).await?;
+            }
+            Ok(())
+        } else if let Some(ref file) = self.id.list {
+            let id_iter = crate::util::read_spec::<u64>(file)?;
+            for id_res in id_iter {
+                let id = id_res?;
+                self.single(id, session).await?;
+            }
+            Ok(())
+        } else {
+            unreachable!()
+        }
+    }
+
+    async fn single(&self, id: u64, session: &crate::config::Session) -> anyhow::Result<()> {
         if self.mkdir {
             std::fs::create_dir_all(&self.base_dir)?;
         }
 
-        let illust_type = crate::db::get_illust_type(self.id).await?.ok_or_else(|| {
+        let illust_type = crate::db::get_illust_type(id).await?.ok_or_else(|| {
             anyhow::anyhow!(
                 "{} not found in DB. Please run `pixivdwn illust {}` first.",
-                self.id,
-                self.id
+                id,
+                id
             )
         })?;
         let induced_download_type = match illust_type {
@@ -74,12 +105,12 @@ impl Download {
         let skipped_pages = if self.force_redownload {
             HashSet::new()
         } else {
-            crate::db::get_existing_pages(self.id).await?
+            crate::db::get_existing_pages(id).await?
         };
 
         match download_type {
             DownloadType::Image => {
-                let pages = crate::data::pixiv::get_illust_pages(session, self.id).await?;
+                let pages = crate::data::pixiv::get_illust_pages(session, id).await?;
                 let tot_pages = pages.len();
                 tracing::info!("Downloading {} pages...", tot_pages);
                 for (idx, page) in pages.iter().enumerate() {
@@ -100,8 +131,8 @@ impl Download {
                         url
                     );
                     assert!(
-                        filename.starts_with(format!("{}_p{}.", self.id, idx).as_str())
-                            || filename.starts_with(format!("{}_ugoira{}.", self.id, idx).as_str())
+                        filename.starts_with(format!("{}_p{}.", id, idx).as_str())
+                            || filename.starts_with(format!("{}_ugoira{}.", id, idx).as_str())
                     );
 
                     if !self.dry_run {
@@ -111,7 +142,7 @@ impl Download {
                             .to_str()
                             .ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?;
                         crate::db::update_image(
-                            self.id,
+                            id,
                             idx,
                             url,
                             written_path,
@@ -129,13 +160,13 @@ impl Download {
                     return Ok(());
                 }
 
-                let meta = crate::data::pixiv::get_illust_ugoira_meta(session, self.id).await?;
+                let meta = crate::data::pixiv::get_illust_ugoira_meta(session, id).await?;
                 tracing::info!("Downloading ugoira...");
                 let url = &meta.original_src;
                 let filename = url.split('/').last().unwrap();
                 tracing::info!("Ugoira pack {} from {}", filename, url);
                 assert!(
-                    filename.starts_with(format!("{}_ugoira", self.id).as_str())
+                    filename.starts_with(format!("{}_ugoira", id).as_str())
                         && filename.ends_with(".zip")
                 );
 
@@ -157,7 +188,7 @@ impl Download {
                         .to_str()
                         .ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?;
                     crate::db::update_image(
-                        self.id,
+                        id,
                         0,
                         url,
                         written_path,

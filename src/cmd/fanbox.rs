@@ -165,6 +165,10 @@ pub struct FanboxDownloadArgs {
     /// ID of the image / file
     id: DownloadIdSrc<String>,
 
+    /// Abort if failed
+    #[arg(long)]
+    abort_on_fail: bool,
+
     /// Base directory to save the files
     ///
     /// The illustrations will be saved as `<base_dir>/<post_id>_<idx>_<image_id>[_<name>].<ext>`
@@ -243,11 +247,28 @@ impl FanboxDownloadArgs {
             tokio::fs::create_dir_all(&self.base_dir).await?;
         }
 
+        let mut collected_errs = Vec::new();
         for id in self.id.read()? {
-            self.download_single(session, &id?).await?;
+            let id = id?;
+            if let Err(e) = self.download_single(session, &id).await {
+                if self.abort_on_fail {
+                    return Err(e);
+                } else {
+                    tracing::error!("Failed to download {}: {:?}", id, e);
+                    collected_errs.push((id, e));
+                }
+            };
         }
 
-        Ok(())
+        if collected_errs.is_empty() {
+            Ok(())
+        } else {
+            // TODO: use thiserror
+            Err(anyhow::anyhow!(
+                "{} errors occurred during download",
+                collected_errs.len()
+            ))
+        }
     }
 }
 

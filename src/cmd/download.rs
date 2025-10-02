@@ -20,9 +20,13 @@ enum DownloadType {
 pub struct Download {
     #[clap(flatten)]
     /// ID of the illustration
-    pub id: DownloadIdSrc<u64>,
+    id: DownloadIdSrc<u64>,
 
-    /// Dry run, only fech and print the info
+    /// Abort if failed
+    #[arg(long)]
+    abort_on_fail: bool,
+
+    /// Dry run, only fetch and print the info
     #[arg(long)]
     dry_run: bool,
 
@@ -55,10 +59,28 @@ pub struct Download {
 
 impl Download {
     pub async fn run(self, session: &crate::config::Session) -> anyhow::Result<()> {
+        let mut collected_errs = Vec::new();
         for id in self.id.read()? {
-            self.single(id?, session).await?;
+            let id = id?;
+            if let Err(e) = self.single(id, session).await {
+                if self.abort_on_fail {
+                    return Err(e);
+                } else {
+                    tracing::error!("Failed to download {}: {:?}", id, e);
+                    collected_errs.push((id, e));
+                }
+            };
         }
-        Ok(())
+
+        if collected_errs.is_empty() {
+            Ok(())
+        } else {
+            // TODO: use thiserror
+            Err(anyhow::anyhow!(
+                "{} errors occurred during download",
+                collected_errs.len()
+            ))
+        }
     }
 
     async fn single(&self, id: u64, session: &crate::config::Session) -> anyhow::Result<()> {

@@ -24,14 +24,14 @@ impl TryFrom<&str> for UIDSession {
 pub struct Session {
     pub pixiv: Option<UIDSession>,
     pub fanbox: Option<UIDSession>,
-    pub fanbox_full: Option<String>,
+    pub fanbox_header_full: Option<Vec<(String, String)>>,
 }
 
 impl Session {
     pub fn new(
         pixiv_cookie: Option<String>,
         fanbox_cookie: Option<String>,
-        fanbox_full: Option<String>,
+        fanbox_header_full: Option<String>,
     ) -> anyhow::Result<Self> {
         let pixiv = pixiv_cookie
             .map(|e| UIDSession::try_from(e.as_str()))
@@ -40,10 +40,38 @@ impl Session {
             .map(|e| UIDSession::try_from(e.as_str()))
             .transpose()?;
 
+        let fanbox_header_full = fanbox_header_full
+            .map(|e| -> anyhow::Result<Vec<_>> {
+                let mut ret = Vec::new();
+                for row in e
+                    .trim()
+                    .split("\n")
+                    .filter(|e| {
+                        !(e.starts_with("GET")
+                            || e.starts_with("Host: ")
+                            || e.starts_with("host: "))
+                    })
+                    .map(|e| -> anyhow::Result<_> {
+                        let mut segs = e.splitn(2, ": ");
+                        let name = segs.next().unwrap();
+                        let value = segs
+                            .next()
+                            .ok_or_else(|| anyhow::anyhow!("Unable to parse header: {}", e))?;
+                        Ok((name.to_owned(), value.to_owned()))
+                    })
+                {
+                    ret.push(row?);
+                }
+                Ok(ret)
+            })
+            .transpose()?;
+
+        tracing::debug!("Parsed full headers: {:#?}", fanbox_header_full);
+
         Ok(Self {
             pixiv,
             fanbox,
-            fanbox_full,
+            fanbox_header_full,
         })
     }
 }

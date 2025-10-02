@@ -256,7 +256,7 @@ impl FetchPostBodyLegacy {
         let id = segs.next()?;
         let ext = segs.next()?;
         if segs.next().is_some() {
-            return None
+            return None;
         }
         Some((id, ext))
     }
@@ -333,8 +333,7 @@ impl FetchPostBodyLegacy {
                     let (id, ext) = Self::parse_filename(last_seg).unwrap();
 
                     // Assert that this element only has one text node
-                    let mut children = a
-                        .children();
+                    let mut children = a.children();
                     let text = children.next().unwrap();
                     assert!(children.next().is_none());
                     assert!(text.value().is_text());
@@ -439,9 +438,15 @@ pub struct FanboxRequest<'a>(pub &'a Session);
 
 impl<'a> RequestArgumenter for FanboxRequest<'a> {
     fn argument(self, req: wreq::RequestBuilder) -> anyhow::Result<wreq::RequestBuilder> {
-        let updated = if let Some(ref full) = self.0.fanbox_full {
-            req.header("Cookie", full)
-        } else if let Some(ref cookie) = self.0.fanbox {
+        if let Some(ref full) = self.0.fanbox_header_full {
+            let mut updated = req;
+            for (hdr, val) in full.iter() {
+                updated = updated.header(hdr, val);
+            }
+            return Ok(updated);
+        }
+
+        let updated = if let Some(ref cookie) = self.0.fanbox {
             req.header("Cookie", format!("FANBOXSESSID={};", cookie.cookie))
         } else {
             return Err(anyhow::anyhow!("Fanbox session is required"));

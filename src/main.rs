@@ -17,9 +17,10 @@ struct Args {
     /// Can also be set via the FANBOX_COOKIE environment variable
     fanbox_cookie: Option<String>,
 
-    /// Full Fanbox cookie, including other fields such as Cloudflare tokens
+    /// Full Fanbox headers, including other ones such as UA and full cookie
+    /// Can also be set via the FANBOX_HEADER_FULL environment variable
     /// Overrides `fanbox_cookie` if both are set
-    fanbox_cookie_full: Option<String>,
+    fanbox_header_full: Option<String>,
 
     /// Database URL, Can also be set via the DATABASE_URL environment variable
     #[arg(long)]
@@ -57,11 +58,11 @@ async fn main() -> anyhow::Result<()> {
         .fanbox_cookie
         .or_else(|| std::env::var("FANBOX_COOKIE").ok());
 
-    let fanbox_cookie_full = args
-        .fanbox_cookie_full
-        .or_else(|| std::env::var("FANBOX_COOKIE_FULL").ok());
+    let fanbox_header_full = args
+        .fanbox_header_full
+        .or_else(|| std::env::var("FANBOX_HEADER_FULL").ok());
 
-    let session = config::Session::new(pixiv_cookie, fanbox_cookie, fanbox_cookie_full)?;
+    let session = config::Session::new(pixiv_cookie, fanbox_cookie, fanbox_header_full)?;
     args.command.run(&session).await?;
 
     Ok(())

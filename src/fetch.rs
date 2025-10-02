@@ -58,6 +58,7 @@ pub async fn fetch<T: DeserializeOwned>(
     let client = ctx.client();
     let req = req(client)?;
     tracing::debug!("Fetching {}", req.uri());
+    tracing::debug!("  Headers: {:#?}", req.headers());
     let resp = client.execute(req).await?;
     let json = resp.json::<T>().await?;
     Ok(json)

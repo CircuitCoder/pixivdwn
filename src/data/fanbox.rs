@@ -251,6 +251,16 @@ pub struct FetchPostBodyLegacy {
 }
 
 impl FetchPostBodyLegacy {
+    fn parse_filename(filename: &str) -> Option<(&str, &str)> {
+        let mut segs = filename.splitn(2, ".");
+        let id = segs.next()?;
+        let ext = segs.next()?;
+        if segs.next().is_some() {
+            return None
+        }
+        Some((id, ext))
+    }
+
     fn parse(&mut self) {
         if self.scraper.is_none() {
             self.scraper = Some(scraper::Html::parse_document(&self.html));
@@ -268,17 +278,26 @@ impl FetchPostBodyLegacy {
                     {
                         return None;
                     }
-                    let last_seg = src.rsplit('/').next()?;
-                    let mut last_seg_elements = last_seg.split('.');
-                    let name = last_seg_elements.next().unwrap();
-                    let ext = last_seg_elements.next().unwrap();
-                    assert!(last_seg_elements.next().is_none());
+                    let last_seg = src.rsplit('/').next().unwrap();
+                    let (id, ext) = Self::parse_filename(last_seg).unwrap();
+
+                    // Try to parse width and height from img
+                    let width = img
+                        .value()
+                        .attr("width")
+                        .and_then(|e| e.parse::<u64>().ok())
+                        .unwrap_or(0);
+                    let height = img
+                        .value()
+                        .attr("height")
+                        .and_then(|e| e.parse::<u64>().ok())
+                        .unwrap_or(0);
 
                     Some(FetchPostImage {
-                        id: name.to_string(),
+                        id: id.to_string(),
                         extension: ext.to_string(),
-                        width: 0,
-                        height: 0,
+                        width,
+                        height,
                         original_url: src.to_string(),
                         thumbnail_url: src.to_string(),
                     })
@@ -306,12 +325,35 @@ impl FetchPostBodyLegacy {
                         return None;
                     }
                     // Skipping anchors that are actually images
-                    let last_seg = href.rsplit('/').next()?;
+                    let last_seg: &str = href.rsplit('/').next().unwrap();
                     if file_image_fns.contains(last_seg) {
                         return None;
                     }
 
-                    panic!("Not implemented: files in legacy post: {}", href);
+                    let (id, ext) = Self::parse_filename(last_seg).unwrap();
+
+                    // Assert that this element only has one text node
+                    let mut children = a
+                        .children();
+                    let text = children.next().unwrap();
+                    assert!(children.next().is_none());
+                    assert!(text.value().is_text());
+                    let content = text.value().as_text().unwrap().trim();
+                    // Content should be formatted like <filename> - <size>
+                    let mut content_parts = content.rsplitn(2, " - ");
+                    let size = content_parts.next().unwrap();
+                    let filename = content_parts.next().unwrap();
+
+                    // Ignore size because it's unreliable
+                    tracing::warn!("Unreliable size in legacy post: {}: {}", filename, size);
+
+                    Some(FetchPostFile {
+                        id: id.to_string(),
+                        url: href.to_string(),
+                        name: filename.to_string(),
+                        extension: ext.to_string(),
+                        size: 0,
+                    })
                 })
                 .collect();
             self.files = Some(parsed);

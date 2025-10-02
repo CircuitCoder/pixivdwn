@@ -1,4 +1,4 @@
-use std::{collections::HashSet, io::Read};
+use std::collections::HashSet;
 
 use clap::Args;
 
@@ -143,17 +143,15 @@ impl Download {
                     let DownloadResult {
                         written_path,
                         final_path,
+                        ..
                     } = self.download_file(session, url, filename).await?;
                     let mut archive = zip::ZipArchive::new(std::fs::File::open(&final_path)?)?;
                     let mut file = archive.by_name(&meta.frames[0].file)?;
-                    let mut file_content = Vec::new();
-                    file.read_to_end(&mut file_content)?;
-                    let file_content = std::io::Cursor::new(file_content);
-
-                    let image_fmt = image::ImageFormat::from_mime_type(&meta.mime_type)
-                        .ok_or_else(|| anyhow::anyhow!("Unknown mime type: {}", meta.mime_type))?;
-                    let image = image::ImageReader::with_format(file_content, image_fmt);
-                    let (width, height) = image.into_dimensions()?;
+                    let (width, height) = crate::util::get_image_dim(
+                        &mut file,
+                        &meta.frames[0].file,
+                        Some(&meta.mime_type),
+                    )?;
 
                     let written_path = written_path
                         .to_str()

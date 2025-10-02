@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::data::RequestArgumenter;
 
@@ -23,6 +23,7 @@ pub enum DatabasePathFormat {
 pub struct DownloadResult {
     pub written_path: PathBuf,
     pub final_path: PathBuf,
+    pub size: u64,
 }
 
 pub async fn download_then_persist<R: RequestArgumenter>(
@@ -33,7 +34,7 @@ pub async fn download_then_persist<R: RequestArgumenter>(
     url: &str,
     show_progress: bool,
 ) -> anyhow::Result<DownloadResult> {
-    let tmp_file =
+    let (tmp_file, size) =
         crate::data::file::download_to_tmp(req_arg, base_dir, url, show_progress).await?;
 
     let mut final_path = PathBuf::from(base_dir);
@@ -50,6 +51,7 @@ pub async fn download_then_persist<R: RequestArgumenter>(
     Ok(DownloadResult {
         written_path,
         final_path,
+        size,
     })
 }
 
@@ -60,4 +62,25 @@ pub enum TerminationCondition {
 
     /// Terminate until no more illustrations are available
     UntilEnd,
+}
+
+pub fn get_image_dim(
+    mut file: impl std::io::Read,
+    path: impl AsRef<Path>,
+    mime_type: Option<&str>,
+) -> anyhow::Result<(u32, u32)> {
+    let image_fmt = if let Some(mime_type) = mime_type {
+        image::ImageFormat::from_mime_type(mime_type)
+            .ok_or_else(|| anyhow::anyhow!("Unknown mime type: {}", mime_type))?
+    } else {
+        image::ImageFormat::from_path(path.as_ref())?
+    };
+
+    let mut file_content = Vec::new();
+    file.read_to_end(&mut file_content)?;
+    let file_content = std::io::Cursor::new(file_content);
+
+    let image = image::ImageReader::with_format(file_content, image_fmt);
+    let (width, height) = image.into_dimensions()?;
+    Ok((width, height))
 }

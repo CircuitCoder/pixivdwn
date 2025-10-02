@@ -205,7 +205,11 @@ impl Fanbox {
                     std::fs::create_dir_all(&base_dir)?;
                 }
                 let (url, filename) = get_download_spec(r#type, &id).await?;
-                let DownloadResult { written_path, .. } = crate::util::download_then_persist(
+                let DownloadResult {
+                    written_path,
+                    final_path,
+                    size,
+                } = crate::util::download_then_persist(
                     FanboxRequest(session),
                     &base_dir,
                     &filename,
@@ -215,12 +219,27 @@ impl Fanbox {
                 )
                 .await?;
                 let updated = match r#type {
-                    FanboxDownloadType::File => {
-                        crate::db::update_file_download(&id, written_path.to_str().unwrap()).await?
-                    }
                     FanboxDownloadType::Image => {
-                        crate::db::update_image_download(&id, written_path.to_str().unwrap())
-                            .await?
+                        let (width, height) = crate::util::get_image_dim(
+                            std::fs::File::open(&final_path)?,
+                            &final_path,
+                            None,
+                        )?;
+                        crate::db::update_image_download(
+                            &id,
+                            written_path.to_str().unwrap(),
+                            width as i64,
+                            height as i64,
+                        )
+                        .await?
+                    }
+                    FanboxDownloadType::File => {
+                        crate::db::update_file_download(
+                            &id,
+                            written_path.to_str().unwrap(),
+                            size as i64,
+                        )
+                        .await?
                     }
                 };
 

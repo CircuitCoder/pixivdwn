@@ -7,7 +7,7 @@ pub async fn download<W: std::io::Write, R: RequestArgumenter>(
     url: &str,
     mut dst: W,
     show_progress: bool,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<u64> {
     let fetch_ctx = crate::fetch::FetchCtxGuard::begin().await;
     let client = fetch_ctx.client();
 
@@ -20,7 +20,10 @@ pub async fn download<W: std::io::Write, R: RequestArgumenter>(
         anyhow::bail!("Failed to download: HTTP {}", status);
     }
 
-    let size = resp.content_length();
+    let size = resp.headers().get("Content-Length").and_then(|e| {
+        let s = e.to_str().ok()?;
+        s.parse().ok()
+    });
     let mut bar = if !show_progress {
         None
     } else {
@@ -38,12 +41,14 @@ pub async fn download<W: std::io::Write, R: RequestArgumenter>(
     // FIXME: check MIME
 
     let mut stream = resp.bytes_stream();
+    let mut total_length = 0;
 
     while let Some(chunk) = stream.next().await {
         let chunk = chunk?;
         dst.write_all(&chunk)?;
         if let Some(ref mut bar) = bar {
             bar.inc(chunk.len() as u64);
+            total_length += chunk.len() as u64;
         }
     }
 
@@ -51,7 +56,7 @@ pub async fn download<W: std::io::Write, R: RequestArgumenter>(
         bar.finish();
     }
 
-    Ok(())
+    Ok(total_length)
 }
 
 pub async fn download_to_tmp<R: RequestArgumenter>(
@@ -59,10 +64,10 @@ pub async fn download_to_tmp<R: RequestArgumenter>(
     base_dir: &str,
     url: &str,
     show_progress: bool,
-) -> anyhow::Result<NamedTempFile> {
+) -> anyhow::Result<(NamedTempFile, u64)> {
     let mut tmp_file = NamedTempFile::with_prefix_in("pixivdwn_", base_dir)?;
     let mut buffered_file = std::io::BufWriter::new(tmp_file.as_file_mut());
-    download(req_arg, url, &mut buffered_file, show_progress).await?;
+    let file_len = download(req_arg, url, &mut buffered_file, show_progress).await?;
     drop(buffered_file);
-    Ok(tmp_file)
+    Ok((tmp_file, file_len))
 }

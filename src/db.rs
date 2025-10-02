@@ -709,11 +709,28 @@ pub async fn query_fanbox_image_dwn(id: &str) -> anyhow::Result<Option<FanboxIma
     Ok(rec)
 }
 
-pub async fn update_file_download(id: &str, path: &str) -> anyhow::Result<bool> {
+pub async fn update_file_download(id: &str, path: &str, size: i64) -> anyhow::Result<bool> {
     let db = get_db().await?;
+    let orig = sqlx::query!("SELECT size FROM fanbox_files WHERE id = ?", id)
+        .fetch_optional(db)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("File {} not found in database", id))?;
+
+    if orig.size != 0 && orig.size != size {
+        tracing::warn!(
+            "File {} size mismatch: specified {}, downloaded {}",
+            id,
+            orig.size,
+            size
+        );
+    }
+
+    let updated_size = if orig.size != 0 { orig.size } else { size };
+
     let rows_updated = sqlx::query!(
-        "UPDATE fanbox_files SET path = ?, downloaded_at = datetime('now', 'utc') WHERE id = ?",
+        "UPDATE fanbox_files SET path = ?, size = ?, downloaded_at = datetime('now', 'utc') WHERE id = ?",
         path,
+        updated_size,
         id
     )
     .execute(db)
@@ -722,11 +739,41 @@ pub async fn update_file_download(id: &str, path: &str) -> anyhow::Result<bool> 
     Ok(rows_updated > 0)
 }
 
-pub async fn update_image_download(id: &str, path: &str) -> anyhow::Result<bool> {
+pub async fn update_image_download(
+    id: &str,
+    path: &str,
+    width: i64,
+    height: i64,
+) -> anyhow::Result<bool> {
     let db = get_db().await?;
+    let orig = sqlx::query!("SELECT width, height FROM fanbox_images WHERE id = ?", id)
+        .fetch_optional(db)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Image {} not found in database", id))?;
+
+    if orig.width != 0 && orig.width != width || orig.height != 0 && orig.height != height {
+        tracing::warn!(
+            "Image {} dimensions mismatch: specified {}x{}, downloaded {}x{}",
+            id,
+            orig.width,
+            orig.height,
+            width,
+            height
+        );
+    }
+
+    let updated_width = if orig.width != 0 { orig.width } else { width };
+    let updated_height = if orig.height != 0 {
+        orig.height
+    } else {
+        height
+    };
+
     let rows_updated = sqlx::query!(
-        "UPDATE fanbox_images SET path = ?, downloaded_at = datetime('now', 'utc') WHERE id = ?",
+        "UPDATE fanbox_images SET path = ?, width = ?, height = ?, downloaded_at = datetime('now', 'utc') WHERE id = ?",
         path,
+        updated_width,
+        updated_height,
         id
     )
     .execute(db)

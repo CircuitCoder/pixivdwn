@@ -396,7 +396,9 @@ impl RequestArgumenter for PixivRequest<'_> {
             .ok_or_else(|| anyhow::anyhow!("Pixiv session is required"))?;
         Ok(req
             .header("Cookie", format!("PHPSESSID={};", pixiv_session.cookie))
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"))
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
+            .header("Referer", "https://www.pixiv.net/")
+        )
     }
 }
 

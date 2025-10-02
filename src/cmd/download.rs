@@ -4,7 +4,7 @@ use clap::Args;
 
 use crate::{
     data::pixiv::{IllustType, PixivRequest},
-    util::{DatabasePathFormat, DownloadResult},
+    util::{DatabasePathFormat, DownloadIdSrc, DownloadResult},
 };
 
 #[derive(clap::ValueEnum, Clone, Copy)]
@@ -17,21 +17,10 @@ enum DownloadType {
 }
 
 #[derive(Args)]
-#[group(multiple = false, required = true)]
-pub struct DownloadIdSrc {
-    /// Illustration ID
-    pub id: Option<Vec<u64>>,
-
-    /// Reading illustration IDs from a file (`-` for STDIN)
-    #[arg(short, long)]
-    pub list: Option<String>,
-}
-
-#[derive(Args)]
 pub struct Download {
-    /// Illustration ID or IDs
     #[clap(flatten)]
-    pub id: DownloadIdSrc,
+    /// ID of the illustration
+    pub id: DownloadIdSrc<u64>,
 
     /// Dry run, only fech and print the info
     #[arg(long)]
@@ -66,22 +55,10 @@ pub struct Download {
 
 impl Download {
     pub async fn run(self, session: &crate::config::Session) -> anyhow::Result<()> {
-        assert!(self.id.id.is_some() ^ self.id.list.is_some());
-        if let Some(ref ids) = self.id.id {
-            for id in ids {
-                self.single(*id, session).await?;
-            }
-            Ok(())
-        } else if let Some(ref file) = self.id.list {
-            let id_iter = crate::util::read_spec::<u64>(file)?;
-            for id_res in id_iter {
-                let id = id_res?;
-                self.single(id, session).await?;
-            }
-            Ok(())
-        } else {
-            unreachable!()
+        for id in self.id.read()? {
+            self.single(id?, session).await?;
         }
+        Ok(())
     }
 
     async fn single(&self, id: u64, session: &crate::config::Session) -> anyhow::Result<()> {

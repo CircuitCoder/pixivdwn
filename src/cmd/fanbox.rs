@@ -3,7 +3,7 @@ use futures::StreamExt;
 
 use crate::{
     data::fanbox::FanboxRequest,
-    util::{DatabasePathFormat, DownloadResult, TerminationCondition},
+    util::{DatabasePathFormat, DownloadIdSrc, DownloadResult, TerminationCondition},
 };
 
 #[derive(Args)]
@@ -155,104 +155,116 @@ impl FanboxSyncArgs {
     }
 }
 
+#[derive(Args)]
+pub struct FanboxDownloadArgs {
+    /// Type of the downloaded item
+    #[arg(value_enum)]
+    r#type: FanboxDownloadType,
+
+    #[clap(flatten)]
+    /// ID of the image / file
+    id: DownloadIdSrc<String>,
+
+    /// Base directory to save the files
+    ///
+    /// The illustrations will be saved as `<base_dir>/<post_id>_<idx>_<image_id>[_<name>].<ext>`
+    #[arg(short, long, default_value = "fanbox")]
+    base_dir: String,
+
+    /// Create base directory if not exist
+    #[arg(long)]
+    mkdir: bool,
+
+    /// Canonicalization for paths recorded in database
+    #[arg(long, value_enum, default_value_t = DatabasePathFormat::Absolute)]
+    database_path_format: DatabasePathFormat,
+
+    /// Show progress bar. The download speed is based on the *UNZIPPED* stream, so don't be surprised if it exceeds your bandwidth.
+    #[arg(short, long)]
+    progress: bool,
+}
+
+impl FanboxDownloadArgs {
+    async fn download_single(
+        &self,
+        session: &crate::config::Session,
+        id: &str,
+    ) -> anyhow::Result<()> {
+        let (url, filename) = get_download_spec(self.r#type, id).await?;
+        let DownloadResult {
+            written_path,
+            final_path,
+            size,
+        } = crate::util::download_then_persist(
+            FanboxRequest(session),
+            &self.base_dir,
+            &filename,
+            self.database_path_format,
+            &url,
+            self.progress,
+        )
+        .await?;
+        let updated = match self.r#type {
+            FanboxDownloadType::Image => {
+                let (width, height) = crate::util::get_image_dim(
+                    std::fs::File::open(&final_path)?,
+                    &final_path,
+                    None,
+                )?;
+                crate::db::update_image_download(
+                    &id,
+                    written_path.to_str().unwrap(),
+                    width as i64,
+                    height as i64,
+                )
+                .await?
+            }
+            FanboxDownloadType::File => {
+                crate::db::update_file_download(&id, written_path.to_str().unwrap(), size as i64)
+                    .await?
+            }
+        };
+
+        assert!(
+            updated,
+            "{} {} should exist in database. Possible DB race",
+            match self.r#type {
+                FanboxDownloadType::File => "File",
+                FanboxDownloadType::Image => "Image",
+            },
+            id
+        );
+
+        Ok(())
+    }
+
+    pub async fn run(self, session: &crate::config::Session) -> anyhow::Result<()> {
+        if self.mkdir {
+            tokio::fs::create_dir_all(&self.base_dir).await?;
+        }
+
+        for id in self.id.read()? {
+            self.download_single(session, &id?).await?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Subcommand)]
 pub enum FanboxCmd {
     /// Synchronize posts from a Fanbox creator
     Sync(FanboxSyncArgs),
 
     /// Download a specific synced file or image
-    Download {
-        /// Type of the downloaded item
-        #[arg(value_enum)]
-        r#type: FanboxDownloadType,
-
-        /// ID of the image / file
-        id: String,
-
-        /// Base directory to save the files
-        ///
-        /// The illustrations will be saved as `<base_dir>/<post_id>_<idx>_<image_id>[_<name>].<ext>`
-        #[arg(short, long, default_value = "fanbox")]
-        base_dir: String,
-
-        /// Create base directory if not exist
-        #[arg(long)]
-        mkdir: bool,
-
-        /// Canonicalization for paths recorded in database
-        #[arg(long, value_enum, default_value_t = DatabasePathFormat::Absolute)]
-        database_path_format: DatabasePathFormat,
-
-        /// Show progress bar. The download speed is based on the *UNZIPPED* stream, so don't be surprised if it exceeds your bandwidth.
-        #[arg(short, long)]
-        progress: bool,
-    },
+    Download(FanboxDownloadArgs),
 }
 
 impl Fanbox {
     pub async fn run(self, session: &crate::config::Session) -> anyhow::Result<()> {
         match self.cmd {
             FanboxCmd::Sync(sync) => sync.run(session).await?,
-            FanboxCmd::Download {
-                r#type,
-                id,
-                database_path_format,
-                base_dir,
-                mkdir,
-                progress,
-            } => {
-                if mkdir {
-                    std::fs::create_dir_all(&base_dir)?;
-                }
-                let (url, filename) = get_download_spec(r#type, &id).await?;
-                let DownloadResult {
-                    written_path,
-                    final_path,
-                    size,
-                } = crate::util::download_then_persist(
-                    FanboxRequest(session),
-                    &base_dir,
-                    &filename,
-                    database_path_format,
-                    &url,
-                    progress,
-                )
-                .await?;
-                let updated = match r#type {
-                    FanboxDownloadType::Image => {
-                        let (width, height) = crate::util::get_image_dim(
-                            std::fs::File::open(&final_path)?,
-                            &final_path,
-                            None,
-                        )?;
-                        crate::db::update_image_download(
-                            &id,
-                            written_path.to_str().unwrap(),
-                            width as i64,
-                            height as i64,
-                        )
-                        .await?
-                    }
-                    FanboxDownloadType::File => {
-                        crate::db::update_file_download(
-                            &id,
-                            written_path.to_str().unwrap(),
-                            size as i64,
-                        )
-                        .await?
-                    }
-                };
-
-                assert!(
-                    updated,
-                    "{} {} should exist in database. Possible DB race",
-                    match r#type {
-                        FanboxDownloadType::File => "File",
-                        FanboxDownloadType::Image => "Image",
-                    },
-                    id
-                );
-            }
+            FanboxCmd::Download(dwn) => dwn.run(session).await?,
         }
         Ok(())
     }

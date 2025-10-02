@@ -1,4 +1,10 @@
-use std::{io::{BufRead, Read}, path::{Path, PathBuf}, str::FromStr};
+use std::{
+    io::{BufRead, Read},
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+
+use clap::Args;
 
 use crate::data::RequestArgumenter;
 
@@ -85,7 +91,41 @@ pub fn get_image_dim(
     Ok((width, height))
 }
 
-pub fn read_spec<T: FromStr>(src: &str) -> anyhow::Result<impl Iterator<Item = anyhow::Result<T>>> {
+#[derive(Args)]
+#[group(multiple = false, required = true)]
+pub struct DownloadIdSrc<U: FromStr>
+where
+    <U as FromStr>::Err: Into<Box<dyn std::error::Error + std::marker::Send + Sync + 'static>>,
+    U: Send + Sync + Clone + 'static,
+{
+    /// IDs in argument
+    pub id: Option<Vec<U>>,
+
+    /// Reading illustration IDs from a file (`-` for STDIN)
+    #[arg(short, long)]
+    pub list: Option<String>,
+}
+
+impl<U: FromStr> DownloadIdSrc<U>
+where
+    <U as FromStr>::Err: Into<Box<dyn std::error::Error + std::marker::Send + Sync + 'static>>,
+    U: Send + Sync + Clone + 'static,
+{
+    pub fn read(&self) -> anyhow::Result<Box<dyn Iterator<Item = anyhow::Result<U>>>> {
+        if let Some(ref ids) = self.id {
+            let ids = ids.clone();
+            Ok(Box::new(ids.into_iter().map(Ok)))
+        } else if let Some(ref file) = self.list {
+            read_spec::<U>(file).map(|it| Box::new(it) as _)
+        } else {
+            panic!("Trying to iterate DownloadIdSrc without any source");
+        }
+    }
+}
+
+fn read_spec<T: FromStr>(
+    src: &str,
+) -> anyhow::Result<impl Iterator<Item = anyhow::Result<T>> + 'static> {
     let reader: Box<dyn Read> = if src == "-" {
         Box::new(std::io::stdin())
     } else {
@@ -94,8 +134,7 @@ pub fn read_spec<T: FromStr>(src: &str) -> anyhow::Result<impl Iterator<Item = a
     let buf_reader = std::io::BufReader::new(reader);
     Ok(buf_reader.lines().map(|line| {
         let line = line?;
-        line.parse::<T>().map_err(|_| {
-            anyhow::anyhow!("Failed to parse line: {}", line)
-        })
+        line.parse::<T>()
+            .map_err(|_| anyhow::anyhow!("Failed to parse line: {}", line))
     }))
 }

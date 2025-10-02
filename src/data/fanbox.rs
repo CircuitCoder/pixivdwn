@@ -261,6 +261,33 @@ impl FetchPostBodyLegacy {
         Some((id, ext))
     }
 
+    fn try_parse_file_filename(content: &str) -> Option<&str> {
+        // Content should be formatted like <filename> - <size>
+        let mut content_parts = content.rsplitn(2, " - ");
+        let size = content_parts.next().unwrap();
+        if let Some(filename) = content_parts.next() {
+            // Ignore size because it's unreliable
+            tracing::warn!("Unreliable size in legacy post: {}: {}", filename, size);
+            return Some(filename);
+        }
+
+        // Also try <filename> (Size)
+        if content.ends_with(')') {
+            let mut content_parts = content.rsplitn(2, " (");
+            let size = content_parts.next().unwrap();
+            if let Some(filename) = content_parts.next() {
+                tracing::warn!(
+                    "Unreliable size in legacy post: {}: {}",
+                    filename,
+                    &size[..(size.len() - 1)]
+                );
+                return Some(filename);
+            }
+        }
+
+        return None;
+    }
+
     fn parse(&mut self) {
         if self.scraper.is_none() {
             self.scraper = Some(scraper::Html::parse_document(&self.html));
@@ -306,13 +333,15 @@ impl FetchPostBodyLegacy {
             self.images = Some(parsed);
         }
 
-        let file_image_fns: HashSet<_> = self
+        let file_image_ids: HashSet<_> = self
             .images
             .as_ref()
             .unwrap()
             .iter()
-            .map(|e| format!("{}.{}", e.id, e.extension))
+            .map(|e| e.id.as_str())
             .collect();
+
+        tracing::debug!("All image ids: {:?}", file_image_ids);
 
         if self.files.is_none() {
             let parsed = scraper
@@ -324,27 +353,31 @@ impl FetchPostBodyLegacy {
                     {
                         return None;
                     }
+                    tracing::debug!("Href: {}", href);
                     // Skipping anchors that are actually images
                     let last_seg: &str = href.rsplit('/').next().unwrap();
-                    if file_image_fns.contains(last_seg) {
+                    let (id, ext) = Self::parse_filename(last_seg).unwrap();
+                    if file_image_ids.contains(id) {
                         return None;
                     }
-
-                    let (id, ext) = Self::parse_filename(last_seg).unwrap();
 
                     // Assert that this element only has one text node
                     let mut children = a.children();
                     let text = children.next().unwrap();
+                    tracing::debug!("Children: {:?}", text);
                     assert!(children.next().is_none());
                     assert!(text.value().is_text());
                     let content = text.value().as_text().unwrap().trim();
-                    // Content should be formatted like <filename> - <size>
-                    let mut content_parts = content.rsplitn(2, " - ");
-                    let size = content_parts.next().unwrap();
-                    let filename = content_parts.next().unwrap();
-
-                    // Ignore size because it's unreliable
-                    tracing::warn!("Unreliable size in legacy post: {}: {}", filename, size);
+                    let filename = if let Some(filename) = Self::try_parse_file_filename(content) {
+                        filename
+                    } else {
+                        tracing::warn!(
+                            "Unable to parse filename from {}, using {}",
+                            content,
+                            last_seg
+                        );
+                        last_seg
+                    };
 
                     Some(FetchPostFile {
                         id: id.to_string(),

@@ -48,11 +48,11 @@ pub struct DetailedTag {
     pub locked: bool,
     #[expect(unused)]
     pub deletable: bool,
-    #[serde(deserialize_with = "super::de_str_to_u64")]
+    #[serde(deserialize_with = "super::de_str_to_u64_opt", default)]
     #[expect(unused)]
-    pub user_id: u64,
+    pub user_id: Option<u64>,
     #[expect(unused)]
-    pub user_name: String,
+    pub user_name: Option<String>,
     #[expect(unused)]
     pub romaji: Option<String>,
     #[expect(unused)]
@@ -329,19 +329,58 @@ pub struct UgoiraMeta {
 }
 
 #[derive(Deserialize)]
-pub struct Response<T> {
-    pub error: bool,
-    pub message: String,
-    pub body: Option<T>,
+#[serde(untagged)]
+pub enum ResponseRaw<T> {
+    Full {
+        error: bool,
+        message: String,
+        body: T,
+    },
+    Success {
+        error: bool,
+        body: T,
+    },
+    Errored {
+        error: bool,
+        message: String,
+    },
+}
+
+#[derive(Deserialize)]
+#[serde(try_from = "ResponseRaw<T>")]
+pub enum Response<T> {
+    Success { body: T },
+    Errored { message: String },
+}
+
+impl<T> TryFrom<ResponseRaw<T>> for Response<T> {
+    type Error = anyhow::Error;
+
+    fn try_from(value: ResponseRaw<T>) -> Result<Self, Self::Error> {
+        match value {
+            ResponseRaw::Full {
+                error,
+                message,
+                body,
+            } => {
+                if error {
+                    Ok(Response::Errored { message })
+                } else {
+                    Ok(Response::Success { body })
+                }
+            }
+            ResponseRaw::Errored { error, message } if error => Ok(Response::Errored { message }),
+            ResponseRaw::Success { error, body } if !error => Ok(Response::Success { body }),
+            _ => Err(anyhow::anyhow!("Inconsistent response state")),
+        }
+    }
 }
 
 impl<T> Response<T> {
     pub fn into_body(self) -> anyhow::Result<T> {
-        if self.error {
-            Err(anyhow::anyhow!("API error: {}", self.message))
-        } else {
-            self.body
-                .ok_or_else(|| anyhow::anyhow!("No body in response"))
+        match self {
+            Response::Errored { message } => Err(anyhow::anyhow!("API error: {}", message)),
+            Response::Success { body } => Ok(body),
         }
     }
 }

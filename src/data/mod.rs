@@ -12,6 +12,13 @@ where
     s.parse::<u64>().map_err(serde::de::Error::custom)
 }
 
+fn de_str_to_u64_opt<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    de_str_to_u64(deserializer).map(Some)
+}
+
 fn de_str_or_u64_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
 where
     D: serde::Deserializer<'de>,

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use async_stream::try_stream;
 use serde::{Deserialize, Serialize};
@@ -239,21 +239,120 @@ pub struct FetchPostBodySimple {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct FetchPostBodyLegacy {
+    pub html: String,
+
+    #[serde(skip)]
+    pub scraper: Option<scraper::Html>,
+    #[serde(skip)]
+    pub images: Option<Vec<FetchPostImage>>,
+    #[serde(skip)]
+    pub files: Option<Vec<FetchPostFile>>,
+}
+
+impl FetchPostBodyLegacy {
+    fn parse(&mut self) {
+        if self.scraper.is_none() {
+            self.scraper = Some(scraper::Html::parse_document(&self.html));
+        }
+
+        let scraper = self.scraper.as_ref().unwrap();
+
+        if self.images.is_none() {
+            let parsed = scraper
+                .select(&scraper::Selector::parse("img").unwrap())
+                .filter_map(|img| {
+                    let src = img.value().attr("src")?.trim();
+                    if !src.starts_with("https://downloads.fanbox.cc")
+                        && !src.starts_with("http://downloads.fanbox.cc")
+                    {
+                        return None;
+                    }
+                    let last_seg = src.rsplit('/').next()?;
+                    let mut last_seg_elements = last_seg.split('.');
+                    let name = last_seg_elements.next().unwrap();
+                    let ext = last_seg_elements.next().unwrap();
+                    assert!(last_seg_elements.next().is_none());
+
+                    Some(FetchPostImage {
+                        id: name.to_string(),
+                        extension: ext.to_string(),
+                        width: 0,
+                        height: 0,
+                        original_url: src.to_string(),
+                        thumbnail_url: src.to_string(),
+                    })
+                })
+                .collect();
+            self.images = Some(parsed);
+        }
+
+        let file_image_fns: HashSet<_> = self
+            .images
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|e| format!("{}.{}", e.id, e.extension))
+            .collect();
+
+        if self.files.is_none() {
+            let parsed = scraper
+                .select(&scraper::Selector::parse("a").unwrap())
+                .filter_map(|a| {
+                    let href = a.value().attr("href")?.trim();
+                    if !href.starts_with("https://downloads.fanbox.cc")
+                        && !href.starts_with("http://downloads.fanbox.cc")
+                    {
+                        return None;
+                    }
+                    // Skipping anchors that are actually images
+                    let last_seg = href.rsplit('/').next()?;
+                    if file_image_fns.contains(last_seg) {
+                        return None;
+                    }
+
+                    panic!("Not implemented: files in legacy post: {}", href);
+                })
+                .collect();
+            self.files = Some(parsed);
+        }
+    }
+
+    pub fn images_iter(&mut self) -> impl Iterator<Item = (usize, &FetchPostImage)> {
+        self.parse();
+        self.images.as_ref().unwrap().iter().enumerate()
+    }
+
+    pub fn files_iter(&mut self) -> impl Iterator<Item = (usize, &FetchPostFile)> {
+        self.parse();
+        let img_len = self.images.as_ref().unwrap().len();
+        self.files
+            .as_ref()
+            .unwrap()
+            .iter()
+            .enumerate()
+            .map(move |(i, file)| (i + img_len, file))
+    }
+}
+
+#[derive(Deserialize, Debug)]
 #[serde(untagged)]
 pub enum FetchPostBody {
     Rich(FetchPostBodyRich),
     Simple(FetchPostBodySimple),
+    Legacy(FetchPostBodyLegacy),
 }
 
 impl FetchPostBody {
-    pub fn images<'a>(&'a self) -> Box<dyn Iterator<Item = (usize, &'a FetchPostImage)> + 'a> {
+    pub fn images<'a>(&'a mut self) -> Box<dyn Iterator<Item = (usize, &'a FetchPostImage)> + 'a> {
         match self {
             FetchPostBody::Rich(rich) => Box::new(rich.images.iter().map(|(idx, img)| (*idx, img))),
             FetchPostBody::Simple(simple) => Box::new(simple.images.iter().enumerate()),
+            FetchPostBody::Legacy(legacy) => Box::new(legacy.images_iter()),
         }
     }
 
-    pub fn files<'a>(&'a self) -> Box<dyn Iterator<Item = (usize, &'a FetchPostFile)> + 'a> {
+    pub fn files<'a>(&'a mut self) -> Box<dyn Iterator<Item = (usize, &'a FetchPostFile)> + 'a> {
         match self {
             FetchPostBody::Rich(rich) => {
                 Box::new(rich.files.iter().map(|(idx, file)| (*idx, file)))
@@ -268,6 +367,7 @@ impl FetchPostBody {
                         .map(move |(i, file)| (i + img_len, file)),
                 )
             }
+            FetchPostBody::Legacy(legacy) => Box::new(legacy.files_iter()),
         }
     }
 
@@ -275,6 +375,7 @@ impl FetchPostBody {
         let txt = match self {
             FetchPostBody::Rich(rich) => serde_json::to_string(&rich.blocks)?,
             FetchPostBody::Simple(simple) => simple.text.clone(),
+            FetchPostBody::Legacy(legacy) => legacy.html.clone(),
         };
         Ok(txt)
     }

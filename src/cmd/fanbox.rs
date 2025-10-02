@@ -40,7 +40,7 @@ pub struct FanboxSyncArgs {
     retries: usize,
 
     /// Exponential backoff base for retries
-    #[arg(short, long)]
+    #[arg(long)]
     retry_backoff: Option<usize>,
 }
 
@@ -73,7 +73,7 @@ impl FanboxSyncArgs {
             let id = post.id;
             let mut tries = 0;
             let mut backoff = self.retry_backoff;
-            let detail = loop {
+            let mut detail = loop {
                 match crate::data::fanbox::fetch_post(session, id).await {
                     Err(e) => {
                         tracing::warn!("Failed to fetch post {}: {}", id, e);
@@ -110,7 +110,7 @@ impl FanboxSyncArgs {
 
             tracing::info!("{} post {} - {}", prompt, id, detail.post.title);
 
-            if let Some(ref body) = detail.body {
+            if let Some(ref mut body) = detail.body {
                 for (idx, file) in body.files() {
                     let added = crate::db::add_fanbox_file(detail.post.id, idx, file).await?;
                     if added {

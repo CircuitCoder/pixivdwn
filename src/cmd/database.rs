@@ -190,8 +190,8 @@ impl FileCanonicalizeArgs {
             let entries = crate::db::query_image_paths().await?;
             for ent in entries {
                 if let Some(cur) = ent.path {
-                    let url = crate::db::query_image_url(ent.id.0 as u64, ent.id.1 as usize).await?.expect("Image URL must be set on downloaded images");
-                    let filename = url.split('/').last().unwrap();
+                    // Use original filename for images
+                    let filename = cur.split('/').last().unwrap();
                     let written_path = self.adjust(&cur, outer.base_dir.as_ref().ok_or_else(|| anyhow::anyhow!("Pixiv base dir not specified"))?, &filename).await?;
                     if !self.skip_db && !self.dry_run {
                         crate::db::update_image_path(ent.id, &written_path.to_str().ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?).await?;

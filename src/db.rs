@@ -709,16 +709,6 @@ pub async fn query_fanbox_image_download_spec(id: &str) -> anyhow::Result<Option
     Ok(rec)
 }
 
-pub async fn query_image_url(illust_id: u64, page: usize) -> anyhow::Result<Option<String>> {
-    let db = get_db().await?;
-    let illust_id = illust_id as i64;
-    let page = page as i64;
-    let rec = sqlx::query!("SELECT url FROM images WHERE illust_id = ? AND page = ?", illust_id, page)
-        .fetch_optional(db)
-        .await?;
-    Ok(rec.map(|r| r.url))
-}
-
 pub async fn update_fanbox_file_download(id: &str, path: &str, size: i64) -> anyhow::Result<bool> {
     let db = get_db().await?;
     let orig = sqlx::query!("SELECT size FROM fanbox_files WHERE id = ?", id)

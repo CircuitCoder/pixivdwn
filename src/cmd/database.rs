@@ -95,7 +95,7 @@ pub struct FileFsckArgs {
 #[derive(Args)]
 pub struct FileCanonicalizeArgs {
     /// Resulting path format
-    #[arg(short, long)]
+    #[arg(short, long, value_enum, default_value_t = DatabasePathFormat::Absolute)]
     format: DatabasePathFormat,
 
     /// Don't check pixiv images
@@ -205,7 +205,7 @@ impl FileCanonicalizeArgs {
             let entries = crate::db::query_fanbox_image_paths().await?;
             for ent in entries {
                 if let Some(cur) = ent.path {
-                    let filename = fanbox::get_download_spec(fanbox::FanboxAttachmentType::Image, &ent.id.0).await?.0;
+                    let filename = fanbox::get_download_spec(fanbox::FanboxAttachmentType::Image, &ent.id.0).await?.1;
                     let written_path = self.adjust(&cur, base_dir, &filename).await?;
                     if !self.skip_db && !self.dry_run {
                         crate::db::update_fanbox_image_path(&ent.id.0, &written_path.to_str().ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?).await?;
@@ -219,7 +219,7 @@ impl FileCanonicalizeArgs {
             let entries = crate::db::query_fanbox_file_paths().await?;
             for ent in entries {
                 if let Some(cur) = ent.path {
-                    let filename = fanbox::get_download_spec(fanbox::FanboxAttachmentType::File, &ent.id.0).await?.0;
+                    let filename = fanbox::get_download_spec(fanbox::FanboxAttachmentType::File, &ent.id.0).await?.1;
                     let written_path = self.adjust(&cur, base_dir, &filename).await?;
                     if !self.skip_db && !self.dry_run {
                         crate::db::update_fanbox_file_path(&ent.id.0, &written_path.to_str().ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?).await?;

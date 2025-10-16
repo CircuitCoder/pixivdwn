@@ -13,7 +13,7 @@ pub struct Fanbox {
 }
 
 #[derive(clap::ValueEnum, Clone, Copy)]
-pub enum FanboxDownloadType {
+pub enum FanboxAttachmentType {
     File,
     Image,
 }
@@ -177,7 +177,7 @@ impl FanboxSyncArgs {
 pub struct FanboxDownloadArgs {
     /// Type of the downloaded item
     #[arg(value_enum)]
-    r#type: FanboxDownloadType,
+    r#type: FanboxAttachmentType,
 
     #[clap(flatten)]
     /// ID of the image / file
@@ -227,7 +227,7 @@ impl FanboxDownloadArgs {
         )
         .await?;
         let updated = match self.r#type {
-            FanboxDownloadType::Image => {
+            FanboxAttachmentType::Image => {
                 let (width, height) = crate::util::get_image_dim(
                     std::fs::File::open(&final_path)?,
                     &final_path,
@@ -241,7 +241,7 @@ impl FanboxDownloadArgs {
                 )
                 .await?
             }
-            FanboxDownloadType::File => {
+            FanboxAttachmentType::File => {
                 crate::db::update_file_download(&id, written_path.to_str().unwrap(), size as i64)
                     .await?
             }
@@ -251,8 +251,8 @@ impl FanboxDownloadArgs {
             updated,
             "{} {} should exist in database. Possible DB race",
             match self.r#type {
-                FanboxDownloadType::File => "File",
-                FanboxDownloadType::Image => "Image",
+                FanboxAttachmentType::File => "File",
+                FanboxAttachmentType::Image => "Image",
             },
             id
         );
@@ -291,7 +291,11 @@ impl FanboxDownloadArgs {
 }
 
 #[derive(Args)]
-pub struct FanboxFileArgs {
+pub struct FanboxAttachmentArgs {
+    /// Type of the queried item
+    #[arg(value_enum)]
+    r#type: FanboxAttachmentType,
+
     /// ID of some specific image
     id: Option<String>,
 
@@ -312,11 +316,16 @@ pub struct FanboxFileArgs {
     dry_run: bool,
 }
 
-impl FanboxFileArgs {
+impl FanboxAttachmentArgs {
     pub async fn run(&self, _session: &crate::config::Session) -> anyhow::Result<()> {
         // Just like query, we do SQL concat
+        let tbl = match self.r#type {
+            FanboxAttachmentType::File => "fanbox_files",
+            FanboxAttachmentType::Image => "fanbox_images",
+        };
+
         // TODO: output format
-        let mut sql = "SELECT id from fanbox_files".to_owned();
+        let mut sql = format!("SELECT id from {}", tbl);
         let mut wheres = Vec::new();
 
         if let Some(ref id) = self.id {
@@ -366,8 +375,8 @@ pub enum FanboxCmd {
     /// Download a specific synced file or image
     Download(FanboxDownloadArgs),
 
-    /// File query
-    File(FanboxFileArgs),
+    /// Attachment query
+    Attachment(FanboxAttachmentArgs),
 }
 
 impl Fanbox {
@@ -375,16 +384,16 @@ impl Fanbox {
         match self.cmd {
             FanboxCmd::Sync(sync) => sync.run(session).await?,
             FanboxCmd::Download(dwn) => dwn.run(session).await?,
-            FanboxCmd::File(file) => file.run(session).await?,
+            FanboxCmd::Attachment(file) => file.run(session).await?,
         }
         Ok(())
     }
 }
 
 /// Return (url, filename)
-async fn get_download_spec(ty: FanboxDownloadType, id: &str) -> anyhow::Result<(String, String)> {
+async fn get_download_spec(ty: FanboxAttachmentType, id: &str) -> anyhow::Result<(String, String)> {
     match ty {
-        FanboxDownloadType::File => {
+        FanboxAttachmentType::File => {
             let spec = crate::db::query_fanbox_file_dwn(id)
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("File {} not found in database", id))?;
@@ -394,7 +403,7 @@ async fn get_download_spec(ty: FanboxDownloadType, id: &str) -> anyhow::Result<(
             );
             Ok((spec.url, filename))
         }
-        FanboxDownloadType::Image => {
+        FanboxAttachmentType::Image => {
             let spec = crate::db::query_fanbox_image_dwn(id)
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("Image {} not found in database", id))?;

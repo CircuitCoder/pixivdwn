@@ -38,7 +38,7 @@ pub struct Download {
     ///
     /// The illustrations will be saved as `<base_dir>/<illust_id>_p<page>.<ext>`
     #[arg(short, long, default_value = "images")]
-    base_dir: String,
+    base_dir: String, // TODO: move to PathBuf
 
     /// Canonicalization for paths recorded in database
     #[arg(long, value_enum, default_value_t = DatabasePathFormat::Absolute)]

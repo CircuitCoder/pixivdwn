@@ -781,3 +781,50 @@ pub async fn update_image_download(
     .rows_affected();
     Ok(rows_updated > 0)
 }
+
+pub struct DownloadPathEntry<ID> {
+    pub id: ID,
+    pub path: Option<String>,
+}
+
+pub async fn query_image_paths() -> anyhow::Result<Vec<DownloadPathEntry<(u64, u64)>>> {
+    let db = get_db().await?;
+    let recs = sqlx::query!("SELECT illust_id, page, path FROM images")
+        .fetch_all(db)
+        .await?
+        .into_iter()
+        .map(|r| DownloadPathEntry {
+            id: (r.illust_id as u64, r.page as u64),
+            path: r.path,
+        })
+        .collect();
+    Ok(recs)
+}
+
+pub async fn query_fanbox_image_paths() -> anyhow::Result<Vec<DownloadPathEntry<(String, u64, u64)>>> {
+    let db = get_db().await?;
+    let recs = sqlx::query!("SELECT id as \"id!\", post_id, idx, path FROM fanbox_images")
+        .fetch_all(db)
+        .await?
+        .into_iter()
+        .map(|r| DownloadPathEntry {
+            id: (r.id, r.post_id as u64, r.idx as u64),
+            path: r.path,
+        })
+        .collect();
+    Ok(recs)
+}
+
+pub async fn query_fanbox_file_paths() -> anyhow::Result<Vec<DownloadPathEntry<(String, u64, u64)>>> {
+    let db = get_db().await?;
+    let recs = sqlx::query!("SELECT id as \"id!\", post_id, idx, path FROM fanbox_files")
+        .fetch_all(db)
+        .await?
+        .into_iter()
+        .map(|r| DownloadPathEntry {
+            id: (r.id, r.post_id as u64, r.idx as u64),
+            path: r.path,
+        })
+        .collect();
+    Ok(recs)
+}

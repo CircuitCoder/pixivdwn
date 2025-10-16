@@ -272,6 +272,74 @@ impl FanboxDownloadArgs {
     }
 }
 
+#[derive(Args)]
+pub struct FanboxFileArgs {
+    /// ID of some specific image
+    id: Option<String>,
+
+    /// ID of the related post
+    #[arg(short, long)]
+    post: Option<u64>,
+
+    /// Specify the download state
+    #[arg(short, long)]
+    downloaded: Option<bool>,
+
+    /// Print SQL query
+    #[arg(long)]
+    print_sql: bool,
+
+    /// Dry-run
+    #[arg(long)]
+    dry_run: bool,
+}
+
+impl FanboxFileArgs {
+    pub async fn run(&self, _session: &crate::config::Session) -> anyhow::Result<()> {
+        // Just like query, we do SQL concat
+        // TODO: output format
+        let mut sql = "SELECT id from fanbox_files".to_owned();
+        let mut wheres = Vec::new();
+
+        if let Some(ref id) = self.id {
+            wheres.push(format!("id = '{}'", id));
+        }
+        if let Some(post) = self.post {
+            wheres.push(format!("post_id = {}", post));
+        }
+        if let Some(downloaded) = self.downloaded {
+            let predicate = if downloaded { "path IS NOT NULL" } else { "path IS NULL" };
+            wheres.push(predicate.to_owned())
+        }
+
+        if !wheres.is_empty() {
+            sql.push_str(" WHERE ");
+            sql.push_str(&wheres.join(" AND "));
+        }
+
+        // TODO: order from argument
+        sql.push_str(" ORDER BY post_id ASC, idx ASC");
+
+        if self.print_sql {
+            println!("{}", sql);
+        }
+
+        if self.dry_run {
+            return Ok(());
+        }
+
+        let result = crate::db::query_raw(&sql).await?;
+        use sqlx::Row;
+
+        for row in result {
+            let id: &str = row.try_get("id")?;
+            println!("{}", id);
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Subcommand)]
 pub enum FanboxCmd {
     /// Synchronize posts from a Fanbox creator
@@ -279,6 +347,9 @@ pub enum FanboxCmd {
 
     /// Download a specific synced file or image
     Download(FanboxDownloadArgs),
+
+    /// File query
+    File(FanboxFileArgs),
 }
 
 impl Fanbox {
@@ -286,6 +357,7 @@ impl Fanbox {
         match self.cmd {
             FanboxCmd::Sync(sync) => sync.run(session).await?,
             FanboxCmd::Download(dwn) => dwn.run(session).await?,
+            FanboxCmd::File(file) => file.run(session).await?,
         }
         Ok(())
     }

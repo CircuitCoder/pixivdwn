@@ -233,7 +233,7 @@ impl FanboxDownloadArgs {
                     &final_path,
                     None,
                 )?;
-                crate::db::update_image_download(
+                crate::db::update_fanbox_image_download(
                     &id,
                     written_path.to_str().unwrap(),
                     width as i64,
@@ -242,7 +242,7 @@ impl FanboxDownloadArgs {
                 .await?
             }
             FanboxAttachmentType::File => {
-                crate::db::update_file_download(&id, written_path.to_str().unwrap(), size as i64)
+                crate::db::update_fanbox_file_download(&id, written_path.to_str().unwrap(), size as i64)
                     .await?
             }
         };
@@ -391,20 +391,20 @@ impl Fanbox {
 }
 
 /// Return (url, filename)
-async fn get_download_spec(ty: FanboxAttachmentType, id: &str) -> anyhow::Result<(String, String)> {
+pub async fn get_download_spec(ty: FanboxAttachmentType, id: &str) -> anyhow::Result<(String, String)> {
     match ty {
         FanboxAttachmentType::File => {
-            let spec = crate::db::query_fanbox_file_dwn(id)
+            let spec = crate::db::query_fanbox_file_download_spec(id)
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("File {} not found in database", id))?;
-            let filename = format!(
+            let filename: String = format!(
                 "{}_{}_{}_{}.{}",
                 spec.post_id, spec.idx, id, spec.name, spec.ext
             );
             Ok((spec.url, filename))
         }
         FanboxAttachmentType::Image => {
-            let spec = crate::db::query_fanbox_image_dwn(id)
+            let spec = crate::db::query_fanbox_image_download_spec(id)
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("Image {} not found in database", id))?;
             let filename = format!("{}_{}_{}.{}", spec.post_id, spec.idx, id, spec.ext);

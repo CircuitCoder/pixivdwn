@@ -125,6 +125,14 @@ pub struct FileCanonicalizeArgs {
     /// Overwrite existing files
     #[arg(short = 'f', long)]
     overwrite: bool,
+
+    /// Override old base directory
+    #[arg(long)]
+    base_dir_old: Option<PathBuf>,
+
+    /// Override old base directory for fanbox files
+    #[arg(long)]
+    fanbox_base_dir_old: Option<PathBuf>,
 }
 
 impl FileFsckArgs {
@@ -188,11 +196,13 @@ impl FileCanonicalizeArgs {
     pub async fn run(&self, outer: &FileArgs) -> anyhow::Result<()> {
         if !self.skip_pixiv {
             let entries = crate::db::query_image_paths().await?;
+            let base_dir = outer.base_dir.as_ref().ok_or_else(|| anyhow::anyhow!("Pixiv base dir not specified"))?;
+            let base_dir_old = self.base_dir_old.as_ref().unwrap_or(base_dir);
             for ent in entries {
                 if let Some(cur) = ent.path {
                     // Use original filename for images
                     let filename = cur.split('/').last().unwrap();
-                    let written_path = self.adjust(&cur, outer.base_dir.as_ref().ok_or_else(|| anyhow::anyhow!("Pixiv base dir not specified"))?, &filename).await?;
+                    let written_path = self.adjust(&cur, base_dir_old, &filename, base_dir).await?;
                     if !self.skip_db && !self.dry_run {
                         crate::db::update_image_path(ent.id, &written_path.to_str().ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?).await?;
                     }
@@ -202,11 +212,12 @@ impl FileCanonicalizeArgs {
 
         if !self.skip_fanbox_images {
             let base_dir = outer.fanbox_base_dir.as_ref().ok_or_else(|| anyhow::anyhow!("Fanbox base dir not specified"))?;
+            let base_dir_old = self.fanbox_base_dir_old.as_ref().unwrap_or(base_dir);
             let entries = crate::db::query_fanbox_image_paths().await?;
             for ent in entries {
                 if let Some(cur) = ent.path {
                     let filename = fanbox::get_download_spec(fanbox::FanboxAttachmentType::Image, &ent.id.0).await?.1;
-                    let written_path = self.adjust(&cur, base_dir, &filename).await?;
+                    let written_path = self.adjust(&cur, base_dir_old, &filename, base_dir).await?;
                     if !self.skip_db && !self.dry_run {
                         crate::db::update_fanbox_image_path(&ent.id.0, &written_path.to_str().ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?).await?;
                     }
@@ -216,11 +227,12 @@ impl FileCanonicalizeArgs {
 
         if !self.skip_fanbox_files {
             let base_dir = outer.fanbox_base_dir.as_ref().ok_or_else(|| anyhow::anyhow!("Fanbox base dir not specified"))?;
+            let base_dir_old = self.fanbox_base_dir_old.as_ref().unwrap_or(base_dir);
             let entries = crate::db::query_fanbox_file_paths().await?;
             for ent in entries {
                 if let Some(cur) = ent.path {
                     let filename = fanbox::get_download_spec(fanbox::FanboxAttachmentType::File, &ent.id.0).await?.1;
-                    let written_path = self.adjust(&cur, base_dir, &filename).await?;
+                    let written_path = self.adjust(&cur, base_dir_old, &filename, base_dir).await?;
                     if !self.skip_db && !self.dry_run {
                         crate::db::update_fanbox_file_path(&ent.id.0, &written_path.to_str().ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?).await?;
                     }
@@ -232,7 +244,7 @@ impl FileCanonicalizeArgs {
 
     }
 
-    async fn adjust(&self, cur: &str, base_dir: &PathBuf, filename: &str) -> anyhow::Result<PathBuf> {
+    async fn adjust(&self, cur: &str, base_dir_old: &PathBuf, filename: &str, base_dir: &PathBuf) -> anyhow::Result<PathBuf> {
         let mut target_path = base_dir.clone();
         target_path.push(filename);
         // We use absolute here because the target file does not exist yet
@@ -241,7 +253,7 @@ impl FileCanonicalizeArgs {
         let cur_full_path = if std::path::Path::new(cur).is_absolute() {
             std::path::PathBuf::from(cur)
         } else {
-            let mut p = base_dir.clone();
+            let mut p = base_dir_old.clone();
             p.push(cur);
             p
         }.canonicalize()?;

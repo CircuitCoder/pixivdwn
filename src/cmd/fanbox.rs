@@ -19,9 +19,20 @@ pub enum FanboxDownloadType {
 }
 
 #[derive(Args)]
-pub struct FanboxSyncArgs {
-    /// ID of the Fanbox creator. If not spcified, sync all supported creators
+#[group(required = false, multiple = false)]
+pub struct FanboxSyncSrc {
+    /// ID of the Fanbox creator. If given, sync all posts from this creator.
     creator: Option<String>,
+
+    /// ID of a specific post. If given, only sync this one post.
+    #[arg(short, long)]
+    post: Option<u64>,
+}
+
+#[derive(Args)]
+pub struct FanboxSyncArgs {
+    #[command(flatten)]
+    src: FanboxSyncSrc,
 
     #[arg(alias="term", long, value_enum, default_value_t = TerminationCondition::UntilEnd)]
     /// Termination condition (alias: --term)
@@ -45,13 +56,69 @@ pub struct FanboxSyncArgs {
 }
 
 impl FanboxSyncArgs {
-    async fn sync(&self, session: &crate::config::Session, creator: &str) -> anyhow::Result<()> {
+    async fn sync_post(&self, session: &crate::config::Session, id: u64) -> anyhow::Result<()> {
+        let mut tries = 0;
+        let mut backoff = self.retry_backoff;
+        let mut detail = loop {
+            match crate::data::fanbox::fetch_post(session, id).await {
+                Err(e) => {
+                    tracing::warn!("Failed to fetch post {}: {}", id, e);
+                    if tries == self.retries {
+                        tracing::error!(
+                            "Failed to fetch post {} after {} tries",
+                            id,
+                            1 + self.retries
+                        );
+
+                        return Err(e);
+                    }
+                    tries += 1;
+                    if let Some(ref mut b) = backoff {
+                        tracing::info!("Backing off for {}ms", *b);
+                        tokio::time::sleep(std::time::Duration::from_millis(*b as u64)).await;
+                        *b *= 2;
+                    }
+                }
+                Ok(d) => break d,
+            }
+        };
+
+        let updated = crate::db::update_fanbox_post(&detail).await?;
+        let prompt = match updated {
+            crate::db::FanboxPostUpdateResult::Inserted => "Inserted",
+            crate::db::FanboxPostUpdateResult::Updated => "Updated",
+            crate::db::FanboxPostUpdateResult::Skipped => "Skipped",
+        };
+
+        tracing::info!("{} post {} - {}", prompt, id, detail.post.title);
+
+        if let Some(ref mut body) = detail.body {
+            for (idx, file) in body.files() {
+                let added = crate::db::add_fanbox_file(detail.post.id, idx, file).await?;
+                if added {
+                    tracing::info!("  Added {}: file {} - {}", idx, file.id, file.name);
+                }
+            }
+
+            for (idx, image) in body.images() {
+                let added = crate::db::add_fanbox_image(detail.post.id, idx, image).await?;
+                if added {
+                    tracing::info!("  Added {}: image {}", idx, image.id);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn sync_creator(&self, session: &crate::config::Session, creator: &str) -> anyhow::Result<()> {
         let mut posts = Box::pin(crate::data::fanbox::fetch_author_posts(
             session,
             creator,
             self.skip_pages.unwrap_or(0),
         ));
-        'post: while let Some(post) = posts.next().await.transpose()? {
+
+        while let Some(post) = posts.next().await.transpose()? {
             let orig = crate::db::query_fanbox_post_status(post.id).await?;
             if let Some(orig) = orig
                 && !orig.needs_update(&post)
@@ -70,60 +137,9 @@ impl FanboxSyncArgs {
                 }
             }
 
-            let id = post.id;
-            let mut tries = 0;
-            let mut backoff = self.retry_backoff;
-            let mut detail = loop {
-                match crate::data::fanbox::fetch_post(session, id).await {
-                    Err(e) => {
-                        tracing::warn!("Failed to fetch post {}: {}", id, e);
-                        if tries == self.retries {
-                            tracing::error!(
-                                "Failed to fetch post {} after {} tries",
-                                id,
-                                1 + self.retries
-                            );
-
-                            if !self.skip_failed {
-                                return Err(e);
-                            } else {
-                                continue 'post;
-                            }
-                        }
-                        tries += 1;
-                        if let Some(ref mut b) = backoff {
-                            tracing::info!("Backing off for {}ms", *b);
-                            tokio::time::sleep(std::time::Duration::from_millis(*b as u64)).await;
-                            *b *= 2;
-                        }
-                    }
-                    Ok(d) => break d,
-                }
-            };
-
-            let updated = crate::db::update_fanbox_post(&detail).await?;
-            let prompt = match updated {
-                crate::db::FanboxPostUpdateResult::Inserted => "Inserted",
-                crate::db::FanboxPostUpdateResult::Updated => "Updated",
-                crate::db::FanboxPostUpdateResult::Skipped => "Skipped",
-            };
-
-            tracing::info!("{} post {} - {}", prompt, id, detail.post.title);
-
-            if let Some(ref mut body) = detail.body {
-                for (idx, file) in body.files() {
-                    let added = crate::db::add_fanbox_file(detail.post.id, idx, file).await?;
-                    if added {
-                        tracing::info!("  Added {}: file {} - {}", idx, file.id, file.name);
-                    }
-                }
-
-                for (idx, image) in body.images() {
-                    let added = crate::db::add_fanbox_image(detail.post.id, idx, image).await?;
-                    if added {
-                        tracing::info!("  Added {}: image {}", idx, image.id);
-                    }
-                }
+            let ret = self.sync_post(session, post.id).await;
+            if !self.skip_failed && ret.is_err() {
+                return ret;
             }
         }
         Ok(())
@@ -141,14 +157,16 @@ impl FanboxSyncArgs {
                     .unwrap_or("?"),
                 creator.creator_id
             );
-            self.sync(session, &creator.creator_id).await?;
+            self.sync_creator(session, &creator.creator_id).await?;
         }
         Ok(())
     }
 
     pub async fn run(&self, session: &crate::config::Session) -> anyhow::Result<()> {
-        if let Some(ref c) = self.creator {
-            self.sync(session, c).await
+        if let Some(p) = self.src.post {
+            self.sync_post(session, p).await
+        } else if let Some(ref c) = self.src.creator {
+            self.sync_creator(session, c).await
         } else {
             self.sync_all(session).await
         }
@@ -342,7 +360,7 @@ impl FanboxFileArgs {
 
 #[derive(Subcommand)]
 pub enum FanboxCmd {
-    /// Synchronize posts from a Fanbox creator
+    /// Synchronize a specific post, posts from Fanbox creator, or all supported creators
     Sync(FanboxSyncArgs),
 
     /// Download a specific synced file or image

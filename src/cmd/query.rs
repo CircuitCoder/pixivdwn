@@ -37,6 +37,9 @@ pub enum Format {
     /// Count only
     Count,
 
+    /// FIle count only
+    FileCount,
+
     /// ID only
     ID,
 
@@ -65,6 +68,10 @@ pub struct Query {
     /// Bookmark tag, can appear multiple times to specify multiple tags (AND)
     #[arg(short, long)]
     bookmark_tag: Vec<String>,
+
+    /// Author ID
+    #[arg(short, long)]
+    author_id: Option<u64>,
 
     /// Ordering
     #[arg(short, long, value_enum, default_value_t = QueryOrder::IdAsc)]
@@ -95,6 +102,7 @@ impl Query {
             "SELECT {} FROM illusts",
             match self.format {
                 Format::Count => "COUNT(*) as count",
+                Format::FileCount => "SUM(page_count) as count",
                 Format::ID => "id",
                 Format::JSON => "*",
             }
@@ -171,6 +179,10 @@ impl Query {
             ));
         }
 
+        if let Some(author_id) = self.author_id {
+            wheres.push(format!("author_id = {}", author_id));
+        }
+
         if wheres.len() > 0 {
             sql.push_str(" WHERE ");
             sql.push_str(&wheres.join(" AND "));
@@ -200,7 +212,7 @@ impl Query {
         use sqlx::Row;
 
         match self.format {
-            Format::Count => {
+            Format::Count | Format::FileCount => {
                 let row = result.into_iter().next().unwrap();
                 let count: i64 = row.try_get("count")?;
                 println!("{}", count);

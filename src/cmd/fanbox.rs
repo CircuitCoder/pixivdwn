@@ -34,8 +34,8 @@ pub struct FanboxSyncArgs {
     #[command(flatten)]
     src: FanboxSyncSrc,
 
-    #[arg(alias="term", long, value_enum, default_value_t = TerminationCondition::UntilEnd)]
     /// Termination condition (alias: --term)
+    #[arg(alias="term", long, value_enum, default_value_t = TerminationCondition::UntilEnd)]
     termination: TerminationCondition,
 
     /// Skip pages. Can only be used when `creator` is specified
@@ -292,6 +292,15 @@ impl FanboxDownloadArgs {
     }
 }
 
+#[derive(clap::ValueEnum, Clone, Copy)]
+pub enum QueryOrder {
+    /// Order by (post_id ASC, idx ASC)
+    PostAsc,
+
+    /// Order by (post_id DESC, idx ASC)
+    PostDesc,
+}
+
 #[derive(Args)]
 pub struct FanboxAttachmentArgs {
     /// Type of the queried item
@@ -308,6 +317,10 @@ pub struct FanboxAttachmentArgs {
     /// Specify the download state
     #[arg(short, long)]
     downloaded: Option<bool>,
+
+    /// Ordering of the returned ids
+    #[arg(short, long, value_enum, default_value_t = QueryOrder::PostDesc)]
+    order: QueryOrder,
 
     /// Print SQL query
     #[arg(long)]
@@ -350,8 +363,10 @@ impl FanboxAttachmentArgs {
             sql.push_str(&wheres.join(" AND "));
         }
 
-        // TODO: order from argument
-        sql.push_str(" ORDER BY post_id ASC, idx ASC");
+        match self.order {
+            QueryOrder::PostAsc => sql.push_str(" ORDER BY post_id ASC, idx ASC"),
+            QueryOrder::PostDesc => sql.push_str(" ORDER BY post_id DESC, idx ASC"),
+        }
 
         if self.print_sql {
             println!("{}", sql);

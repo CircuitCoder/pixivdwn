@@ -34,7 +34,7 @@ pub struct DownloadResult {
 
 pub async fn download_then_persist<R: RequestArgumenter>(
     req_arg: R,
-    base_dir: &str,
+    base_dir: &Path,
     filename: &str,
     fmt: DatabasePathFormat,
     url: &str,

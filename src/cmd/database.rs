@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use clap::{Args, Subcommand};
 
-use crate::{cmd::fanbox, util::DatabasePathFormat};
+use crate::{cmd::fanbox, config::Session, util::DatabasePathFormat};
 
 #[derive(Args)]
 pub struct Database {
@@ -14,21 +14,13 @@ pub struct Database {
 pub struct FileArgs {
     #[command(subcommand)]
     cmd: FileCmd,
-
-    /// Base directory of save illustrations
-    #[arg(long)]
-    base_dir: Option<PathBuf>,
-
-    /// Base directory of save fanbox files
-    #[arg(long)]
-    fanbox_base_dir: Option<PathBuf>
 }
 
 impl FileArgs {
-    pub async fn run(&self) -> anyhow::Result<()> {
+    pub async fn run(&self, session: &Session) -> anyhow::Result<()> {
         match self.cmd {
-            FileCmd::Fsck(ref args) => args.run(self).await?,
-            FileCmd::Canonicalize(ref args) => args.run(self).await?,
+            FileCmd::Fsck(ref args) => args.run(session).await?,
+            FileCmd::Canonicalize(ref args) => args.run(session).await?,
         }
         Ok(())
     }
@@ -115,12 +107,12 @@ pub struct FileCanonicalizeArgs {
 }
 
 impl FileFsckArgs {
-    pub async fn run(&self, outer: &FileArgs) -> anyhow::Result<()> {
+    pub async fn run(&self, session: &Session) -> anyhow::Result<()> {
         let mut failed = 0usize;
         if !self.skip_pixiv {
             let entries = crate::db::query_image_paths().await?;
             for ent in entries {
-                if let Some(p) = ent.path && !Self::check(&p, outer.base_dir.as_ref()).await? {
+                if let Some(p) = ent.path && !Self::check(&p, session.get_pixiv_base_dir()).await? {
                     failed += 1;
                     tracing::error!("Missing pixiv image {} ({}_p{})", p, ent.id.0, ent.id.1);
                 }
@@ -130,7 +122,7 @@ impl FileFsckArgs {
         if !self.skip_fanbox_images {
             let entries = crate::db::query_fanbox_image_paths().await?;
             for ent in entries {
-                if let Some(p) = ent.path && !Self::check(&p, outer.fanbox_base_dir.as_ref()).await? {
+                if let Some(p) = ent.path && !Self::check(&p, session.get_fanbox_base_dir()).await? {
                     failed += 1;
                     tracing::error!("Missing fanbox image {} ({}_{}_{})", p, ent.id.1, ent.id.2, ent.id.0);
                 }
@@ -140,7 +132,7 @@ impl FileFsckArgs {
         if !self.skip_fanbox_files {
             let entries = crate::db::query_fanbox_file_paths().await?;
             for ent in entries {
-                if let Some(p) = ent.path && !Self::check(&p, outer.fanbox_base_dir.as_ref()).await? {
+                if let Some(p) = ent.path && !Self::check(&p, session.get_fanbox_base_dir()).await? {
                     failed += 1;
                     tracing::error!("Missing fanbox file {} ({}_{}_{})", p, ent.id.1, ent.id.2, ent.id.0);
                 }
@@ -154,16 +146,16 @@ impl FileFsckArgs {
         }
     }
 
-    async fn check(path: &str, base_dir: Option<&PathBuf>) -> anyhow::Result<bool> {
+    async fn check(path: &str, base_dir: anyhow::Result<&PathBuf>) -> anyhow::Result<bool> {
         // Path may be absolute or relative
         let full_path = if std::path::Path::new(path).is_absolute() {
             std::path::PathBuf::from(path)
-        } else if let Some(base_dir) = base_dir {
+        } else if let Ok(base_dir) = base_dir {
             let mut p = base_dir.clone();
             p.push(path);
             p
         } else {
-            return Err(anyhow::anyhow!("Relative path {} requires specified base dir", path));
+            return Err(anyhow::anyhow!("Relative path {} requires specified base dir: {}", path, base_dir.unwrap_err()));
         };
         tracing::debug!("Checking path {}", full_path.display());
 
@@ -172,10 +164,10 @@ impl FileFsckArgs {
 }
 
 impl FileCanonicalizeArgs {
-    pub async fn run(&self, outer: &FileArgs) -> anyhow::Result<()> {
+    pub async fn run(&self, session: &Session) -> anyhow::Result<()> {
         if !self.skip_pixiv {
             let entries = crate::db::query_image_paths().await?;
-            let base_dir = outer.base_dir.as_ref().ok_or_else(|| anyhow::anyhow!("Pixiv base dir not specified"))?;
+            let base_dir = session.get_pixiv_base_dir()?;
             let base_dir_old = self.base_dir_old.as_ref().unwrap_or(base_dir);
             for ent in entries {
                 if let Some(cur) = ent.path {
@@ -190,7 +182,7 @@ impl FileCanonicalizeArgs {
         }
 
         if !self.skip_fanbox_images {
-            let base_dir = outer.fanbox_base_dir.as_ref().ok_or_else(|| anyhow::anyhow!("Fanbox base dir not specified"))?;
+            let base_dir = session.get_fanbox_base_dir()?;
             let base_dir_old = self.fanbox_base_dir_old.as_ref().unwrap_or(base_dir);
             let entries = crate::db::query_fanbox_image_paths().await?;
             for ent in entries {
@@ -205,7 +197,7 @@ impl FileCanonicalizeArgs {
         }
 
         if !self.skip_fanbox_files {
-            let base_dir = outer.fanbox_base_dir.as_ref().ok_or_else(|| anyhow::anyhow!("Fanbox base dir not specified"))?;
+            let base_dir = session.get_fanbox_base_dir()?;
             let base_dir_old = self.fanbox_base_dir_old.as_ref().unwrap_or(base_dir);
             let entries = crate::db::query_fanbox_file_paths().await?;
             for ent in entries {
@@ -294,10 +286,10 @@ impl FileCanonicalizeArgs {
 }
 
 impl Database {
-    pub async fn run(self) -> anyhow::Result<()> {
+    pub async fn run(self, session: &Session) -> anyhow::Result<()> {
         match self.cmd {
             DatabaseCmd::Setup => self.setup().await,
-            DatabaseCmd::File(file) => file.run().await,
+            DatabaseCmd::File(file) => file.run(session).await,
         }
     }
 

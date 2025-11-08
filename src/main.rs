@@ -5,6 +5,8 @@ mod db;
 mod fetch;
 mod util;
 
+use std::path::PathBuf;
+
 use clap::Parser;
 #[derive(Parser)]
 struct Args {
@@ -21,6 +23,18 @@ struct Args {
     /// Can also be set via the FANBOX_HEADER_FULL environment variable
     /// Overrides `fanbox_cookie` if both are set
     fanbox_header_full: Option<String>,
+
+    /// Base directory to save / lookup pixiv illustrations
+    ///
+    /// The illustrations will be saved as `<base_dir>/<illust_id>_p<page>.<ext>`
+    /// Can also be set via the PIXIV_BASE_DIR environment variable
+    pixiv_base_dir: Option<PathBuf>,
+
+    /// Base directory to save / lookup fanbox illustrations
+    ///
+    /// The illustrations will be saved as `<base_dir>/<post_id>_<idx>_<image_id>[_<name>].<ext>`
+    /// Can also be set via the FANBOX_BASE_DIR environment variable
+    fanbox_base_dir: Option<PathBuf>,
 
     /// Database URL, Can also be set via the DATABASE_URL environment variable
     #[arg(long)]
@@ -62,7 +76,14 @@ async fn main() -> anyhow::Result<()> {
         .fanbox_header_full
         .or_else(|| std::env::var("FANBOX_HEADER_FULL").ok());
 
-    let session = config::Session::new(pixiv_cookie, fanbox_cookie, fanbox_header_full)?;
+    let pixiv_base_dir = args.pixiv_base_dir.or_else(|| {
+        std::env::var("PIXIV_BASE_DIR").ok().map(PathBuf::from)
+    });
+    let fanbox_base_dir = args.fanbox_base_dir.or_else(|| {
+        std::env::var("FANBOX_BASE_DIR").ok().map(PathBuf::from)
+    });
+
+    let session = config::Session::new(pixiv_cookie, fanbox_cookie, fanbox_header_full, pixiv_base_dir, fanbox_base_dir)?;
     args.command.run(&session).await?;
 
     Ok(())

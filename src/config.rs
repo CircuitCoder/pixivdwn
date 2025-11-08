@@ -25,6 +25,9 @@ pub struct Session {
     pub pixiv: Option<UIDSession>,
     pub fanbox: Option<UIDSession>,
     pub fanbox_header_full: Option<Vec<(String, String)>>,
+
+    pub pixiv_base_dir: Option<std::path::PathBuf>,
+    pub fanbox_base_dir: Option<std::path::PathBuf>,
 }
 
 impl Session {
@@ -32,6 +35,8 @@ impl Session {
         pixiv_cookie: Option<String>,
         fanbox_cookie: Option<String>,
         fanbox_header_full: Option<String>,
+        pixiv_base_dir: Option<std::path::PathBuf>,
+        fanbox_base_dir: Option<std::path::PathBuf>,
     ) -> anyhow::Result<Self> {
         let pixiv = pixiv_cookie
             .map(|e| UIDSession::try_from(e.as_str()))
@@ -72,6 +77,20 @@ impl Session {
             pixiv,
             fanbox,
             fanbox_header_full,
+            pixiv_base_dir,
+            fanbox_base_dir,
+        })
+    }
+
+    pub fn get_pixiv_base_dir(&self) -> anyhow::Result<&std::path::PathBuf> {
+        self.pixiv_base_dir.as_ref().ok_or_else(|| {
+            anyhow::anyhow!("Pixiv base directory is not set.")
+        })
+    }
+
+    pub fn get_fanbox_base_dir(&self) -> anyhow::Result<&std::path::PathBuf> {
+        self.fanbox_base_dir.as_ref().ok_or_else(|| {
+            anyhow::anyhow!("Fanbox base directory is not set.")
         })
     }
 }

@@ -36,7 +36,7 @@ impl Command {
             Command::Download(cmd) => cmd.run(session).await,
             Command::Fanbox(cmd) => cmd.run(session).await,
             Command::Query(cmd) => cmd.run().await,
-            Command::Database(cmd) => cmd.run().await,
+            Command::Database(cmd) => cmd.run(session).await,
         }
     }
 }

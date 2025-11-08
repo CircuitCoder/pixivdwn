@@ -34,12 +34,6 @@ pub struct Download {
     #[arg(long)]
     mkdir: bool,
 
-    /// Base directory to save the illustration
-    ///
-    /// The illustrations will be saved as `<base_dir>/<illust_id>_p<page>.<ext>`
-    #[arg(short, long, default_value = "images")]
-    base_dir: String, // TODO: move to PathBuf
-
     /// Canonicalization for paths recorded in database
     #[arg(long, value_enum, default_value_t = DatabasePathFormat::Absolute)]
     database_path_format: DatabasePathFormat,
@@ -85,7 +79,7 @@ impl Download {
 
     async fn single(&self, id: u64, session: &crate::config::Session) -> anyhow::Result<()> {
         if self.mkdir {
-            std::fs::create_dir_all(&self.base_dir)?;
+            std::fs::create_dir_all(session.get_pixiv_base_dir()?)?;
         }
 
         let illust_type = crate::db::get_illust_type(id).await?.ok_or_else(|| {
@@ -211,7 +205,7 @@ impl Download {
     ) -> anyhow::Result<DownloadResult> {
         crate::util::download_then_persist(
             PixivRequest(session),
-            &self.base_dir,
+            session.get_pixiv_base_dir()?,
             filename,
             self.database_path_format,
             url,

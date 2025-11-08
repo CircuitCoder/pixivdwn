@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::data::{RequestArgumenter, RequestExt};
 use futures::StreamExt;
 use tempfile::NamedTempFile;
@@ -61,7 +63,7 @@ pub async fn download<W: std::io::Write, R: RequestArgumenter>(
 
 pub async fn download_to_tmp<R: RequestArgumenter>(
     req_arg: R,
-    base_dir: &str,
+    base_dir: &Path,
     url: &str,
     show_progress: bool,
 ) -> anyhow::Result<(NamedTempFile, u64)> {

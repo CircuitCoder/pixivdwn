@@ -187,12 +187,6 @@ pub struct FanboxDownloadArgs {
     #[arg(long)]
     abort_on_fail: bool,
 
-    /// Base directory to save the files
-    ///
-    /// The illustrations will be saved as `<base_dir>/<post_id>_<idx>_<image_id>[_<name>].<ext>`
-    #[arg(short, long, default_value = "fanbox")]
-    base_dir: String,
-
     /// Create base directory if not exist
     #[arg(long)]
     mkdir: bool,
@@ -219,7 +213,7 @@ impl FanboxDownloadArgs {
             size,
         } = crate::util::download_then_persist(
             FanboxRequest(session),
-            &self.base_dir,
+            session.get_fanbox_base_dir()?,
             &filename,
             self.database_path_format,
             &url,
@@ -262,7 +256,7 @@ impl FanboxDownloadArgs {
 
     pub async fn run(self, session: &crate::config::Session) -> anyhow::Result<()> {
         if self.mkdir {
-            tokio::fs::create_dir_all(&self.base_dir).await?;
+            tokio::fs::create_dir_all(session.get_fanbox_base_dir()?).await?;
         }
 
         let mut collected_errs = Vec::new();

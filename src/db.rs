@@ -678,7 +678,9 @@ pub struct FanboxFileDownloadSpec {
     pub idx: i64,
 }
 
-pub async fn query_fanbox_file_download_spec(id: &str) -> anyhow::Result<Option<FanboxFileDownloadSpec>> {
+pub async fn query_fanbox_file_download_spec(
+    id: &str,
+) -> anyhow::Result<Option<FanboxFileDownloadSpec>> {
     let db = get_db().await?;
     let rec = sqlx::query_as!(
         FanboxFileDownloadSpec,
@@ -697,7 +699,9 @@ pub struct FanboxImageDownloadSpec {
     pub idx: i64,
 }
 
-pub async fn query_fanbox_image_download_spec(id: &str) -> anyhow::Result<Option<FanboxImageDownloadSpec>> {
+pub async fn query_fanbox_image_download_spec(
+    id: &str,
+) -> anyhow::Result<Option<FanboxImageDownloadSpec>> {
     let db = get_db().await?;
     let rec = sqlx::query_as!(
         FanboxImageDownloadSpec,
@@ -801,7 +805,8 @@ pub async fn query_image_paths() -> anyhow::Result<Vec<DownloadPathEntry<(u64, u
     Ok(recs)
 }
 
-pub async fn query_fanbox_image_paths() -> anyhow::Result<Vec<DownloadPathEntry<(String, u64, u64)>>> {
+pub async fn query_fanbox_image_paths() -> anyhow::Result<Vec<DownloadPathEntry<(String, u64, u64)>>>
+{
     let db = get_db().await?;
     let recs = sqlx::query!("SELECT id as \"id!\", post_id, idx, path FROM fanbox_images")
         .fetch_all(db)
@@ -815,7 +820,8 @@ pub async fn query_fanbox_image_paths() -> anyhow::Result<Vec<DownloadPathEntry<
     Ok(recs)
 }
 
-pub async fn query_fanbox_file_paths() -> anyhow::Result<Vec<DownloadPathEntry<(String, u64, u64)>>> {
+pub async fn query_fanbox_file_paths() -> anyhow::Result<Vec<DownloadPathEntry<(String, u64, u64)>>>
+{
     let db = get_db().await?;
     let recs = sqlx::query!("SELECT id as \"id!\", post_id, idx, path FROM fanbox_files")
         .fetch_all(db)
@@ -847,26 +853,18 @@ pub async fn update_image_path(ident: (u64, u64), path: &str) -> anyhow::Result<
 
 pub async fn update_fanbox_image_path(id: &str, path: &str) -> anyhow::Result<bool> {
     let db = get_db().await?;
-    let rows_updated = sqlx::query!(
-        "UPDATE fanbox_images SET path = ? WHERE id = ?",
-        path,
-        id
-    )
-    .execute(db)
-    .await?
-    .rows_affected();
+    let rows_updated = sqlx::query!("UPDATE fanbox_images SET path = ? WHERE id = ?", path, id)
+        .execute(db)
+        .await?
+        .rows_affected();
     Ok(rows_updated > 0)
 }
 
 pub async fn update_fanbox_file_path(id: &str, path: &str) -> anyhow::Result<bool> {
     let db = get_db().await?;
-    let rows_updated = sqlx::query!(
-        "UPDATE fanbox_files SET path = ? WHERE id = ?",
-        path,
-        id
-    )
-    .execute(db)
-    .await?
-    .rows_affected();
+    let rows_updated = sqlx::query!("UPDATE fanbox_files SET path = ? WHERE id = ?", path, id)
+        .execute(db)
+        .await?
+        .rows_affected();
     Ok(rows_updated > 0)
 }

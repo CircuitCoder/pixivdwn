@@ -111,7 +111,11 @@ impl FanboxSyncArgs {
         Ok(())
     }
 
-    async fn sync_creator(&self, session: &crate::config::Session, creator: &str) -> anyhow::Result<()> {
+    async fn sync_creator(
+        &self,
+        session: &crate::config::Session,
+        creator: &str,
+    ) -> anyhow::Result<()> {
         let mut posts = Box::pin(crate::data::fanbox::fetch_author_posts(
             session,
             creator,
@@ -236,8 +240,12 @@ impl FanboxDownloadArgs {
                 .await?
             }
             FanboxAttachmentType::File => {
-                crate::db::update_fanbox_file_download(&id, written_path.to_str().unwrap(), size as i64)
-                    .await?
+                crate::db::update_fanbox_file_download(
+                    &id,
+                    written_path.to_str().unwrap(),
+                    size as i64,
+                )
+                .await?
             }
         };
 
@@ -329,7 +337,11 @@ impl FanboxAttachmentArgs {
             wheres.push(format!("post_id = {}", post));
         }
         if let Some(downloaded) = self.downloaded {
-            let predicate = if downloaded { "path IS NOT NULL" } else { "path IS NULL" };
+            let predicate = if downloaded {
+                "path IS NOT NULL"
+            } else {
+                "path IS NULL"
+            };
             wheres.push(predicate.to_owned())
         }
 
@@ -385,7 +397,10 @@ impl Fanbox {
 }
 
 /// Return (url, filename)
-pub async fn get_download_spec(ty: FanboxAttachmentType, id: &str) -> anyhow::Result<(String, String)> {
+pub async fn get_download_spec(
+    ty: FanboxAttachmentType,
+    id: &str,
+) -> anyhow::Result<(String, String)> {
     match ty {
         FanboxAttachmentType::File => {
             let spec = crate::db::query_fanbox_file_download_spec(id)

@@ -76,14 +76,20 @@ async fn main() -> anyhow::Result<()> {
         .fanbox_header_full
         .or_else(|| std::env::var("FANBOX_HEADER_FULL").ok());
 
-    let pixiv_base_dir = args.pixiv_base_dir.or_else(|| {
-        std::env::var("PIXIV_BASE_DIR").ok().map(PathBuf::from)
-    });
-    let fanbox_base_dir = args.fanbox_base_dir.or_else(|| {
-        std::env::var("FANBOX_BASE_DIR").ok().map(PathBuf::from)
-    });
+    let pixiv_base_dir = args
+        .pixiv_base_dir
+        .or_else(|| std::env::var("PIXIV_BASE_DIR").ok().map(PathBuf::from));
+    let fanbox_base_dir = args
+        .fanbox_base_dir
+        .or_else(|| std::env::var("FANBOX_BASE_DIR").ok().map(PathBuf::from));
 
-    let session = config::Session::new(pixiv_cookie, fanbox_cookie, fanbox_header_full, pixiv_base_dir, fanbox_base_dir)?;
+    let session = config::Session::new(
+        pixiv_cookie,
+        fanbox_cookie,
+        fanbox_header_full,
+        pixiv_base_dir,
+        fanbox_base_dir,
+    )?;
     args.command.run(&session).await?;
 
     Ok(())

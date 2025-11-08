@@ -83,14 +83,14 @@ impl Session {
     }
 
     pub fn get_pixiv_base_dir(&self) -> anyhow::Result<&std::path::PathBuf> {
-        self.pixiv_base_dir.as_ref().ok_or_else(|| {
-            anyhow::anyhow!("Pixiv base directory is not set.")
-        })
+        self.pixiv_base_dir
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Pixiv base directory is not set."))
     }
 
     pub fn get_fanbox_base_dir(&self) -> anyhow::Result<&std::path::PathBuf> {
-        self.fanbox_base_dir.as_ref().ok_or_else(|| {
-            anyhow::anyhow!("Fanbox base directory is not set.")
-        })
+        self.fanbox_base_dir
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Fanbox base directory is not set."))
     }
 }

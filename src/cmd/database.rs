@@ -38,7 +38,7 @@ pub enum DatabaseCmd {
 #[derive(Subcommand)]
 pub enum FileCmd {
     /// Check the existence of downloaded files
-    Fsck(FileFsckArgs) ,
+    Fsck(FileFsckArgs),
 
     /// Canonicalize downloaded paths
     Canonicalize(FileCanonicalizeArgs),
@@ -112,7 +112,9 @@ impl FileFsckArgs {
         if !self.skip_pixiv {
             let entries = crate::db::query_image_paths().await?;
             for ent in entries {
-                if let Some(p) = ent.path && !Self::check(&p, session.get_pixiv_base_dir()).await? {
+                if let Some(p) = ent.path
+                    && !Self::check(&p, session.get_pixiv_base_dir()).await?
+                {
                     failed += 1;
                     tracing::error!("Missing pixiv image {} ({}_p{})", p, ent.id.0, ent.id.1);
                 }
@@ -122,9 +124,17 @@ impl FileFsckArgs {
         if !self.skip_fanbox_images {
             let entries = crate::db::query_fanbox_image_paths().await?;
             for ent in entries {
-                if let Some(p) = ent.path && !Self::check(&p, session.get_fanbox_base_dir()).await? {
+                if let Some(p) = ent.path
+                    && !Self::check(&p, session.get_fanbox_base_dir()).await?
+                {
                     failed += 1;
-                    tracing::error!("Missing fanbox image {} ({}_{}_{})", p, ent.id.1, ent.id.2, ent.id.0);
+                    tracing::error!(
+                        "Missing fanbox image {} ({}_{}_{})",
+                        p,
+                        ent.id.1,
+                        ent.id.2,
+                        ent.id.0
+                    );
                 }
             }
         }
@@ -132,9 +142,17 @@ impl FileFsckArgs {
         if !self.skip_fanbox_files {
             let entries = crate::db::query_fanbox_file_paths().await?;
             for ent in entries {
-                if let Some(p) = ent.path && !Self::check(&p, session.get_fanbox_base_dir()).await? {
+                if let Some(p) = ent.path
+                    && !Self::check(&p, session.get_fanbox_base_dir()).await?
+                {
                     failed += 1;
-                    tracing::error!("Missing fanbox file {} ({}_{}_{})", p, ent.id.1, ent.id.2, ent.id.0);
+                    tracing::error!(
+                        "Missing fanbox file {} ({}_{}_{})",
+                        p,
+                        ent.id.1,
+                        ent.id.2,
+                        ent.id.0
+                    );
                 }
             }
         }
@@ -155,7 +173,11 @@ impl FileFsckArgs {
             p.push(path);
             p
         } else {
-            return Err(anyhow::anyhow!("Relative path {} requires specified base dir: {}", path, base_dir.unwrap_err()));
+            return Err(anyhow::anyhow!(
+                "Relative path {} requires specified base dir: {}",
+                path,
+                base_dir.unwrap_err()
+            ));
         };
         tracing::debug!("Checking path {}", full_path.display());
 
@@ -175,7 +197,13 @@ impl FileCanonicalizeArgs {
                     let filename = cur.split('/').last().unwrap();
                     let written_path = self.adjust(&cur, base_dir_old, &filename, base_dir).await?;
                     if !self.skip_db && !self.dry_run {
-                        crate::db::update_image_path(ent.id, &written_path.to_str().ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?).await?;
+                        crate::db::update_image_path(
+                            ent.id,
+                            &written_path
+                                .to_str()
+                                .ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?,
+                        )
+                        .await?;
                     }
                 }
             }
@@ -187,10 +215,19 @@ impl FileCanonicalizeArgs {
             let entries = crate::db::query_fanbox_image_paths().await?;
             for ent in entries {
                 if let Some(cur) = ent.path {
-                    let filename = fanbox::get_download_spec(fanbox::FanboxAttachmentType::Image, &ent.id.0).await?.1;
+                    let filename =
+                        fanbox::get_download_spec(fanbox::FanboxAttachmentType::Image, &ent.id.0)
+                            .await?
+                            .1;
                     let written_path = self.adjust(&cur, base_dir_old, &filename, base_dir).await?;
                     if !self.skip_db && !self.dry_run {
-                        crate::db::update_fanbox_image_path(&ent.id.0, &written_path.to_str().ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?).await?;
+                        crate::db::update_fanbox_image_path(
+                            &ent.id.0,
+                            &written_path
+                                .to_str()
+                                .ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?,
+                        )
+                        .await?;
                     }
                 }
             }
@@ -202,20 +239,34 @@ impl FileCanonicalizeArgs {
             let entries = crate::db::query_fanbox_file_paths().await?;
             for ent in entries {
                 if let Some(cur) = ent.path {
-                    let filename = fanbox::get_download_spec(fanbox::FanboxAttachmentType::File, &ent.id.0).await?.1;
+                    let filename =
+                        fanbox::get_download_spec(fanbox::FanboxAttachmentType::File, &ent.id.0)
+                            .await?
+                            .1;
                     let written_path = self.adjust(&cur, base_dir_old, &filename, base_dir).await?;
                     if !self.skip_db && !self.dry_run {
-                        crate::db::update_fanbox_file_path(&ent.id.0, &written_path.to_str().ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?).await?;
+                        crate::db::update_fanbox_file_path(
+                            &ent.id.0,
+                            &written_path
+                                .to_str()
+                                .ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?,
+                        )
+                        .await?;
                     }
                 }
             }
         }
 
         Ok(())
-
     }
 
-    async fn adjust(&self, cur: &str, base_dir_old: &PathBuf, filename: &str, base_dir: &PathBuf) -> anyhow::Result<PathBuf> {
+    async fn adjust(
+        &self,
+        cur: &str,
+        base_dir_old: &PathBuf,
+        filename: &str,
+        base_dir: &PathBuf,
+    ) -> anyhow::Result<PathBuf> {
         let mut target_path = base_dir.clone();
         target_path.push(filename);
         // We use absolute here because the target file does not exist yet
@@ -228,19 +279,39 @@ impl FileCanonicalizeArgs {
             let mut p = base_dir_old.clone();
             p.push(cur);
             p
-        }.canonicalize();
-        let cur_resolved_path = cur_full_path.as_ref().map(PathBuf::as_path).unwrap_or(cur_path);
+        }
+        .canonicalize();
+        let cur_resolved_path = cur_full_path
+            .as_ref()
+            .map(PathBuf::as_path)
+            .unwrap_or(cur_path);
 
         if cur_resolved_path != target_path {
             // Check file existence requirement
             let target_exists = target_path.exists();
-            tracing::info!("{} -> {}", cur_resolved_path.display(), target_path.display());
+            tracing::info!(
+                "{} -> {}",
+                cur_resolved_path.display(),
+                target_path.display()
+            );
             if !self.skip_file && !cur_full_path.is_ok() {
-                return Err(anyhow::anyhow!("{} -> {}: Source file does not exist", cur_resolved_path.display(), target_path.display()));
+                return Err(anyhow::anyhow!(
+                    "{} -> {}: Source file does not exist",
+                    cur_resolved_path.display(),
+                    target_path.display()
+                ));
             } else if !self.skip_file && target_exists && !self.overwrite {
-                return Err(anyhow::anyhow!("{} -> {}: Target file already exists", cur_resolved_path.display(), target_path.display()));
+                return Err(anyhow::anyhow!(
+                    "{} -> {}: Target file already exists",
+                    cur_resolved_path.display(),
+                    target_path.display()
+                ));
             } else if self.skip_file && !self.skip_file_without_existence_check && !target_exists {
-                return Err(anyhow::anyhow!("{} -> {}: Target file does not exist in skip file mode", cur_resolved_path.display(), target_path.display()));
+                return Err(anyhow::anyhow!(
+                    "{} -> {}: Target file does not exist in skip file mode",
+                    cur_resolved_path.display(),
+                    target_path.display()
+                ));
             }
 
             if !self.dry_run {
@@ -249,8 +320,13 @@ impl FileCanonicalizeArgs {
                         tracing::warn!("Overwriting existing file {}", target_path.display());
                     }
                     Self::mv(&cur_full_path.unwrap(), &target_path).await?;
-                } else if let Ok(cur_full_path) = cur_full_path && cur_full_path.exists() {
-                    tracing::warn!("Source exists in skip file mode: {}", cur_full_path.display());
+                } else if let Ok(cur_full_path) = cur_full_path
+                    && cur_full_path.exists()
+                {
+                    tracing::warn!(
+                        "Source exists in skip file mode: {}",
+                        cur_full_path.display()
+                    );
                 }
             }
         }

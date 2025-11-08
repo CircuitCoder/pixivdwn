@@ -13,27 +13,32 @@ struct Args {
     #[arg(long)]
     /// Pixiv Cookie, not including the "PHPSESSID=" prefix
     /// Can also be set via the PIXIV_COOKIE environment variable
+    #[arg(long)]
     pixiv_cookie: Option<String>,
 
     /// Fanbox cookie, not including the "FANBOXSESSID=" prefix
     /// Can also be set via the FANBOX_COOKIE environment variable
+    #[arg(long)]
     fanbox_cookie: Option<String>,
 
     /// Full Fanbox headers, including other ones such as UA and full cookie
     /// Can also be set via the FANBOX_HEADER_FULL environment variable
     /// Overrides `fanbox_cookie` if both are set
+    #[arg(long)]
     fanbox_header_full: Option<String>,
 
     /// Base directory to save / lookup pixiv illustrations
     ///
     /// The illustrations will be saved as `<base_dir>/<illust_id>_p<page>.<ext>`
     /// Can also be set via the PIXIV_BASE_DIR environment variable
+    #[arg(long)]
     pixiv_base_dir: Option<PathBuf>,
 
     /// Base directory to save / lookup fanbox illustrations
     ///
     /// The illustrations will be saved as `<base_dir>/<post_id>_<idx>_<image_id>[_<name>].<ext>`
     /// Can also be set via the FANBOX_BASE_DIR environment variable
+    #[arg(long)]
     fanbox_base_dir: Option<PathBuf>,
 
     /// Database URL, Can also be set via the DATABASE_URL environment variable

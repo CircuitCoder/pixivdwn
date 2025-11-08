@@ -29,7 +29,6 @@ impl FileArgs {
         match self.cmd {
             FileCmd::Fsck(ref args) => args.run(self).await?,
             FileCmd::Canonicalize(ref args) => args.run(self).await?,
-            _ => unimplemented!(),
         }
         Ok(())
     }
@@ -51,30 +50,6 @@ pub enum FileCmd {
 
     /// Canonicalize downloaded paths
     Canonicalize(FileCanonicalizeArgs),
-
-    /// Move download base. Done by directly moving the entire directory.
-    /// This is more efficient than canonicalizing with a new base dir
-    MvBase {
-        /// Move pixiv base to
-        #[arg(long)]
-        to: Option<String>,
-
-        /// Move fanbox base to
-        #[arg(long)]
-        fanbox_to: Option<String>,
-
-        /// Skip updating db
-        #[arg(long)]
-        skip_db: bool,
-
-        /// Skip moving file
-        #[arg(long)]
-        skip_file: bool,
-
-        /// Equivlent to `--skip-db --skip-file`
-        #[arg(long)]
-        dry_run: bool,
-    }
 }
 
 #[derive(Args)]
@@ -118,7 +93,11 @@ pub struct FileCanonicalizeArgs {
     #[arg(long)]
     skip_file: bool,
 
-    /// Equivlent to `--skip-db --skip-file`
+    /// Besides skipping moving file, also don't check if file is already at destination
+    #[arg(long, requires = "skip_file")]
+    skip_file_without_existence_check: bool,
+
+    /// Perform a dry run
     #[arg(long)]
     dry_run: bool,
 
@@ -250,24 +229,37 @@ impl FileCanonicalizeArgs {
         // We use absolute here because the target file does not exist yet
         let target_path_full = std::path::absolute(target_path.as_path())?;
 
-        let cur_full_path = if std::path::Path::new(cur).is_absolute() {
+        let cur_path = std::path::Path::new(cur);
+        let cur_full_path = if cur_path.is_absolute() {
             std::path::PathBuf::from(cur)
         } else {
             let mut p = base_dir_old.clone();
             p.push(cur);
             p
-        }.canonicalize()?;
+        }.canonicalize();
+        let cur_resolved_path = cur_full_path.as_ref().map(PathBuf::as_path).unwrap_or(cur_path);
 
-        if cur_full_path != target_path {
-            tracing::info!("{} -> {}", cur_full_path.display(), target_path.display());
-            if !self.dry_run && !self.skip_file {
-                if target_path.exists() {
-                    if !self.overwrite {
-                        return Err(anyhow::anyhow!("Target path {} already exists", target_path.display()));
+        if cur_resolved_path != target_path {
+            // Check file existence requirement
+            let target_exists = target_path.exists();
+            tracing::info!("{} -> {}", cur_resolved_path.display(), target_path.display());
+            if !self.skip_file && !cur_full_path.is_ok() {
+                return Err(anyhow::anyhow!("{} -> {}: Source file does not exist", cur_resolved_path.display(), target_path.display()));
+            } else if !self.skip_file && target_exists && !self.overwrite {
+                return Err(anyhow::anyhow!("{} -> {}: Target file already exists", cur_resolved_path.display(), target_path.display()));
+            } else if self.skip_file && !self.skip_file_without_existence_check && !target_exists {
+                return Err(anyhow::anyhow!("{} -> {}: Target file does not exist in skip file mode", cur_resolved_path.display(), target_path.display()));
+            }
+
+            if !self.dry_run {
+                if !self.skip_file {
+                    if target_exists {
+                        tracing::warn!("Overwriting existing file {}", target_path.display());
                     }
-                    tracing::warn!("Overwriting existing file {}", target_path.display());
+                    Self::mv(&cur_full_path.unwrap(), &target_path).await?;
+                } else if let Ok(cur_full_path) = cur_full_path && cur_full_path.exists() {
+                    tracing::warn!("Source exists in skip file mode: {}", cur_full_path.display());
                 }
-                Self::mv(&cur_full_path, &target_path).await?;
             }
         }
 

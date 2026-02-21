@@ -1,6 +1,6 @@
 use clap::Args;
 
-use crate::data::pixiv::IllustState;
+use crate::{data::pixiv::IllustState, util::db_row_to_json};
 
 #[derive(clap::ValueEnum, Clone, Copy)]
 pub enum QueryDownloadState {
@@ -224,7 +224,17 @@ impl Query {
                 }
             }
             Format::JSON => {
-                unimplemented!();
+                println!("[");
+                let mut first = true;
+                for row in result {
+                    if !first {
+                        println!(",");
+                    }
+                    first = false;
+                    let json = db_row_to_json(row)?;
+                    println!("{}", serde_json::to_string(&json)?);
+                }
+                println!("]");
             }
         }
         Ok(())

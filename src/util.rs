@@ -5,6 +5,7 @@ use std::{
 };
 
 use clap::Args;
+use sqlx::{Column, Row, TypeInfo, sqlite::SqliteRow};
 
 use crate::data::RequestArgumenter;
 
@@ -137,4 +138,25 @@ fn read_spec<T: FromStr>(
         line.parse::<T>()
             .map_err(|_| anyhow::anyhow!("Failed to parse line: {}", line))
     }))
+}
+
+pub fn db_row_to_json(
+    row: SqliteRow,
+) -> anyhow::Result<serde_json::Map<String, serde_json::Value>> {
+    let mut map = serde_json::Map::new();
+    for col in row.columns() {
+        let name = col.name();
+        let ordinal = col.ordinal();
+        let ty = col.type_info();
+        let val: serde_json::Value = match ty.name() {
+            "NULL" => serde_json::Value::Null,
+            "INTEGER" => row.get::<i64, _>(ordinal).into(),
+            "REAL" => row.get::<f64, _>(ordinal).into(),
+            "TEXT" => row.get::<String, _>(ordinal).into(),
+            "BOOLEAN" => row.get::<bool, _>(ordinal).into(),
+            _ => return Err(anyhow::anyhow!("Unsupported column type: {}", ty.name())),
+        };
+        map.insert(name.to_string(), val);
+    }
+    Ok(map)
 }

@@ -56,7 +56,12 @@ pub struct FanboxSyncArgs {
 }
 
 impl FanboxSyncArgs {
-    async fn sync_post(&self, session: &crate::config::Session, id: u64) -> anyhow::Result<()> {
+    async fn sync_post(
+        &self,
+        session: &crate::config::Session,
+        db: &crate::db::Database,
+        id: u64,
+    ) -> anyhow::Result<()> {
         let mut tries = 0;
         let mut backoff = self.retry_backoff;
         let mut detail = loop {
@@ -83,7 +88,7 @@ impl FanboxSyncArgs {
             }
         };
 
-        let updated = crate::db::update_fanbox_post(&detail).await?;
+        let updated = db.update_fanbox_post(&detail).await?;
         let prompt = match updated {
             crate::db::FanboxPostUpdateResult::Inserted => "Inserted",
             crate::db::FanboxPostUpdateResult::Updated => "Updated",
@@ -94,14 +99,14 @@ impl FanboxSyncArgs {
 
         if let Some(ref mut body) = detail.body {
             for (idx, file) in body.files() {
-                let added = crate::db::add_fanbox_file(detail.post.id, idx, file).await?;
+                let added = db.add_fanbox_file(detail.post.id, idx, file).await?;
                 if added {
                     tracing::info!("  Added {}: file {} - {}", idx, file.id, file.name);
                 }
             }
 
             for (idx, image) in body.images() {
-                let added = crate::db::add_fanbox_image(detail.post.id, idx, image).await?;
+                let added = db.add_fanbox_image(detail.post.id, idx, image).await?;
                 if added {
                     tracing::info!("  Added {}: image {}", idx, image.id);
                 }
@@ -114,6 +119,7 @@ impl FanboxSyncArgs {
     async fn sync_creator(
         &self,
         session: &crate::config::Session,
+        db: &crate::db::Database,
         creator: &str,
     ) -> anyhow::Result<()> {
         let mut posts = Box::pin(crate::data::fanbox::fetch_author_posts(
@@ -123,7 +129,7 @@ impl FanboxSyncArgs {
         ));
 
         while let Some(post) = posts.next().await.transpose()? {
-            let orig = crate::db::query_fanbox_post_status(post.id).await?;
+            let orig = db.query_fanbox_post_status(post.id).await?;
             if let Some(orig) = orig
                 && !orig.needs_update(&post)
             {
@@ -141,7 +147,7 @@ impl FanboxSyncArgs {
                 }
             }
 
-            let ret = self.sync_post(session, post.id).await;
+            let ret = self.sync_post(session, db, post.id).await;
             if !self.skip_failed && ret.is_err() {
                 return ret;
             }
@@ -149,7 +155,11 @@ impl FanboxSyncArgs {
         Ok(())
     }
 
-    async fn sync_all(&self, session: &crate::config::Session) -> anyhow::Result<()> {
+    async fn sync_all(
+        &self,
+        session: &crate::config::Session,
+        db: &crate::db::Database,
+    ) -> anyhow::Result<()> {
         let creators = crate::data::fanbox::fetch_supporting_list(session).await?;
         for creator in creators {
             tracing::info!(
@@ -161,18 +171,22 @@ impl FanboxSyncArgs {
                     .unwrap_or("?"),
                 creator.creator_id
             );
-            self.sync_creator(session, &creator.creator_id).await?;
+            self.sync_creator(session, db, &creator.creator_id).await?;
         }
         Ok(())
     }
 
-    pub async fn run(&self, session: &crate::config::Session) -> anyhow::Result<()> {
+    pub async fn run(
+        &self,
+        session: &crate::config::Session,
+        db: &crate::db::Database,
+    ) -> anyhow::Result<()> {
         if let Some(p) = self.src.post {
-            self.sync_post(session, p).await
+            self.sync_post(session, db, p).await
         } else if let Some(ref c) = self.src.creator {
-            self.sync_creator(session, c).await
+            self.sync_creator(session, db, c).await
         } else {
-            self.sync_all(session).await
+            self.sync_all(session, db).await
         }
     }
 }
@@ -208,9 +222,10 @@ impl FanboxDownloadArgs {
     async fn download_single(
         &self,
         session: &crate::config::Session,
+        db: &crate::db::Database,
         id: &str,
     ) -> anyhow::Result<()> {
-        let (url, filename) = get_download_spec(self.r#type, id).await?;
+        let (url, filename) = get_download_spec(db, self.r#type, id).await?;
         let DownloadResult {
             written_path,
             final_path,
@@ -231,7 +246,7 @@ impl FanboxDownloadArgs {
                     &final_path,
                     None,
                 )?;
-                crate::db::update_fanbox_image_download(
+                db.update_fanbox_image_download(
                     &id,
                     written_path.to_str().unwrap(),
                     width as i64,
@@ -240,12 +255,8 @@ impl FanboxDownloadArgs {
                 .await?
             }
             FanboxAttachmentType::File => {
-                crate::db::update_fanbox_file_download(
-                    &id,
-                    written_path.to_str().unwrap(),
-                    size as i64,
-                )
-                .await?
+                db.update_fanbox_file_download(&id, written_path.to_str().unwrap(), size as i64)
+                    .await?
             }
         };
 
@@ -262,7 +273,11 @@ impl FanboxDownloadArgs {
         Ok(())
     }
 
-    pub async fn run(self, session: &crate::config::Session) -> anyhow::Result<()> {
+    pub async fn run(
+        self,
+        session: &crate::config::Session,
+        db: &crate::db::Database,
+    ) -> anyhow::Result<()> {
         if self.mkdir {
             tokio::fs::create_dir_all(session.get_fanbox_base_dir()?).await?;
         }
@@ -270,7 +285,7 @@ impl FanboxDownloadArgs {
         let mut collected_errs = Vec::new();
         for id in self.id.read()? {
             let id = id?;
-            if let Err(e) = self.download_single(session, &id).await {
+            if let Err(e) = self.download_single(session, db, &id).await {
                 if self.abort_on_fail {
                     return Err(e);
                 } else {
@@ -332,7 +347,11 @@ pub struct FanboxAttachmentArgs {
 }
 
 impl FanboxAttachmentArgs {
-    pub async fn run(&self, _session: &crate::config::Session) -> anyhow::Result<()> {
+    pub async fn run(
+        &self,
+        _session: &crate::config::Session,
+        db: &crate::db::Database,
+    ) -> anyhow::Result<()> {
         // Just like query, we do SQL concat
         let tbl = match self.r#type {
             FanboxAttachmentType::File => "fanbox_files",
@@ -376,7 +395,7 @@ impl FanboxAttachmentArgs {
             return Ok(());
         }
 
-        let result = crate::db::query_raw(&sql).await?;
+        let result = db.query_raw(&sql).await?;
         use sqlx::Row;
 
         for row in result {
@@ -401,11 +420,15 @@ pub enum FanboxCmd {
 }
 
 impl Fanbox {
-    pub async fn run(self, session: &crate::config::Session) -> anyhow::Result<()> {
+    pub async fn run(
+        self,
+        session: &crate::config::Session,
+        db: &crate::db::Database,
+    ) -> anyhow::Result<()> {
         match self.cmd {
-            FanboxCmd::Sync(sync) => sync.run(session).await?,
-            FanboxCmd::Download(dwn) => dwn.run(session).await?,
-            FanboxCmd::Attachment(file) => file.run(session).await?,
+            FanboxCmd::Sync(sync) => sync.run(session, db).await?,
+            FanboxCmd::Download(dwn) => dwn.run(session, db).await?,
+            FanboxCmd::Attachment(file) => file.run(session, db).await?,
         }
         Ok(())
     }
@@ -413,12 +436,14 @@ impl Fanbox {
 
 /// Return (url, filename)
 pub async fn get_download_spec(
+    db: &crate::db::Database,
     ty: FanboxAttachmentType,
     id: &str,
 ) -> anyhow::Result<(String, String)> {
     match ty {
         FanboxAttachmentType::File => {
-            let spec = crate::db::query_fanbox_file_download_spec(id)
+            let spec = db
+                .query_fanbox_file_download_spec(id)
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("File {} not found in database", id))?;
             let filename: String = format!(
@@ -428,7 +453,8 @@ pub async fn get_download_spec(
             Ok((spec.url, filename))
         }
         FanboxAttachmentType::Image => {
-            let spec = crate::db::query_fanbox_image_download_spec(id)
+            let spec = db
+                .query_fanbox_image_download_spec(id)
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("Image {} not found in database", id))?;
             let filename = format!("{}_{}_{}.{}", spec.post_id, spec.idx, id, spec.ext);

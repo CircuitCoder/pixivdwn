@@ -52,11 +52,15 @@ pub struct Download {
 }
 
 impl Download {
-    pub async fn run(self, session: &crate::config::Session) -> anyhow::Result<()> {
+    pub async fn run(
+        self,
+        session: &crate::config::Session,
+        db: &crate::db::Database,
+    ) -> anyhow::Result<()> {
         let mut collected_errs = Vec::new();
         for id in self.id.read()? {
             let id = id?;
-            if let Err(e) = self.single(id, session).await {
+            if let Err(e) = self.single(id, session, db).await {
                 if self.abort_on_fail {
                     return Err(e);
                 } else {
@@ -77,12 +81,17 @@ impl Download {
         }
     }
 
-    async fn single(&self, id: u64, session: &crate::config::Session) -> anyhow::Result<()> {
+    async fn single(
+        &self,
+        id: u64,
+        session: &crate::config::Session,
+        db: &crate::db::Database,
+    ) -> anyhow::Result<()> {
         if self.mkdir {
             std::fs::create_dir_all(session.get_pixiv_base_dir()?)?;
         }
 
-        let illust_type = crate::db::get_illust_type(id).await?.ok_or_else(|| {
+        let illust_type = db.get_illust_type(id).await?.ok_or_else(|| {
             anyhow::anyhow!(
                 "{} not found in DB. Please run `pixivdwn illust {}` first.",
                 id,
@@ -98,7 +107,7 @@ impl Download {
         let skipped_pages = if self.force_redownload {
             HashSet::new()
         } else {
-            crate::db::get_existing_pages(id).await?
+            db.get_existing_pages(id).await?
         };
 
         match download_type {
@@ -134,16 +143,8 @@ impl Download {
                         let written_path = written_path
                             .to_str()
                             .ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?;
-                        crate::db::update_image(
-                            id,
-                            idx,
-                            url,
-                            written_path,
-                            page.width,
-                            page.height,
-                            None,
-                        )
-                        .await?;
+                        db.update_image(id, idx, url, written_path, page.width, page.height, None)
+                            .await?;
                     }
                 }
             }
@@ -180,7 +181,7 @@ impl Download {
                     let written_path = written_path
                         .to_str()
                         .ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?;
-                    crate::db::update_image(
+                    db.update_image(
                         id,
                         0,
                         url,

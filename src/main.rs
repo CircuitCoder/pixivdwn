@@ -67,7 +67,6 @@ async fn main() -> anyhow::Result<()> {
 
     let database_url = args.database_url.or_else(|| std::env::var("DATABASE_URL").ok())
         .ok_or_else(|| anyhow::anyhow!("Please specify a database URL via --database-url or the DATABASE_URL environment variable"))?;
-    crate::db::set_url(database_url).await?;
 
     let pixiv_cookie = args
         .pixiv_cookie
@@ -95,7 +94,7 @@ async fn main() -> anyhow::Result<()> {
         pixiv_base_dir,
         fanbox_base_dir,
     )?;
-    args.command.run(&session).await?;
+    args.command.run(&session, &database_url).await?;
 
     Ok(())
 }

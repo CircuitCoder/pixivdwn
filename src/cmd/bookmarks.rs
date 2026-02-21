@@ -29,7 +29,11 @@ pub struct Bookmarks {
 }
 
 impl Bookmarks {
-    pub async fn run(self, session: &crate::config::Session) -> anyhow::Result<()> {
+    pub async fn run(
+        self,
+        session: &crate::config::Session,
+        db: &crate::db::Database,
+    ) -> anyhow::Result<()> {
         let bookmarks = crate::data::pixiv::get_bookmarks(
             &session,
             self.tag.as_deref(),
@@ -42,7 +46,7 @@ impl Bookmarks {
         let mut cnt = 0;
         while let Some(illust) = bookmarks.next().await {
             let illust = illust?;
-            let update_result = crate::db::update_illust(&illust, &mut tag_map_ctx).await?;
+            let update_result = db.update_illust(&illust, &mut tag_map_ctx).await?;
             let update_prompt = match update_result {
                 crate::db::IllustUpdateResult::Inserted => "INSERTED",
                 crate::db::IllustUpdateResult::BookmarkIDChanged => "BMIDCHANGED",

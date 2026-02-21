@@ -20,11 +20,15 @@ pub struct Illust {
 }
 
 impl Illust {
-    pub async fn run(self, session: &crate::config::Session) -> anyhow::Result<()> {
+    pub async fn run(
+        self,
+        session: &crate::config::Session,
+        db: &crate::db::Database,
+    ) -> anyhow::Result<()> {
         let mut errored = 0;
         for id in self.id.read()? {
             let id = id?;
-            let ret = self.sync_single(session, id).await;
+            let ret = self.sync_single(session, db, id).await;
             if ret.is_err() {
                 if self.abort_on_fail {
                     return ret;
@@ -43,12 +47,17 @@ impl Illust {
         }
     }
 
-    async fn sync_single(&self, session: &crate::config::Session, id: u64) -> anyhow::Result<()> {
+    async fn sync_single(
+        &self,
+        session: &crate::config::Session,
+        db: &crate::db::Database,
+        id: u64,
+    ) -> anyhow::Result<()> {
         let illust = crate::data::pixiv::get_illust(session, id).await?;
 
         if !self.dry_run {
             let mut tag_map_ctx: HashMap<String, u64> = HashMap::new();
-            let update_result = crate::db::update_illust(&illust, &mut tag_map_ctx).await?;
+            let update_result = db.update_illust(&illust, &mut tag_map_ctx).await?;
             let update_prompt = match update_result {
                 crate::db::IllustUpdateResult::Inserted => "INSERTED",
                 crate::db::IllustUpdateResult::BookmarkIDChanged => "BMIDCHANGED",

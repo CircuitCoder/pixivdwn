@@ -95,7 +95,7 @@ pub struct Query {
 }
 
 impl Query {
-    pub async fn run(self) -> anyhow::Result<()> {
+    pub async fn run(self, db: &crate::db::Database) -> anyhow::Result<()> {
         // You know what, let's concat SQL
 
         let mut sql = format!(
@@ -208,7 +208,7 @@ impl Query {
             return Ok(());
         }
 
-        let result = crate::db::query_raw(&sql).await?;
+        let result = db.query_raw(&sql).await?;
         use sqlx::Row;
 
         match self.format {

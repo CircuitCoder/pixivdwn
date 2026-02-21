@@ -17,10 +17,10 @@ pub struct FileArgs {
 }
 
 impl FileArgs {
-    pub async fn run(&self, session: &Session) -> anyhow::Result<()> {
+    pub async fn run(&self, session: &Session, db: &crate::db::Database) -> anyhow::Result<()> {
         match self.cmd {
-            FileCmd::Fsck(ref args) => args.run(session).await?,
-            FileCmd::Canonicalize(ref args) => args.run(session).await?,
+            FileCmd::Fsck(ref args) => args.run(session, db).await?,
+            FileCmd::Canonicalize(ref args) => args.run(session, db).await?,
         }
         Ok(())
     }
@@ -107,10 +107,10 @@ pub struct FileCanonicalizeArgs {
 }
 
 impl FileFsckArgs {
-    pub async fn run(&self, session: &Session) -> anyhow::Result<()> {
+    pub async fn run(&self, session: &Session, db: &crate::db::Database) -> anyhow::Result<()> {
         let mut failed = 0usize;
         if !self.skip_pixiv {
-            let entries = crate::db::query_image_paths().await?;
+            let entries = db.query_image_paths().await?;
             for ent in entries {
                 if let Some(p) = ent.path
                     && !Self::check(&p, session.get_pixiv_base_dir()).await?
@@ -122,7 +122,7 @@ impl FileFsckArgs {
         }
 
         if !self.skip_fanbox_images {
-            let entries = crate::db::query_fanbox_image_paths().await?;
+            let entries = db.query_fanbox_image_paths().await?;
             for ent in entries {
                 if let Some(p) = ent.path
                     && !Self::check(&p, session.get_fanbox_base_dir()).await?
@@ -140,7 +140,7 @@ impl FileFsckArgs {
         }
 
         if !self.skip_fanbox_files {
-            let entries = crate::db::query_fanbox_file_paths().await?;
+            let entries = db.query_fanbox_file_paths().await?;
             for ent in entries {
                 if let Some(p) = ent.path
                     && !Self::check(&p, session.get_fanbox_base_dir()).await?
@@ -186,9 +186,9 @@ impl FileFsckArgs {
 }
 
 impl FileCanonicalizeArgs {
-    pub async fn run(&self, session: &Session) -> anyhow::Result<()> {
+    pub async fn run(&self, session: &Session, db: &crate::db::Database) -> anyhow::Result<()> {
         if !self.skip_pixiv {
-            let entries = crate::db::query_image_paths().await?;
+            let entries = db.query_image_paths().await?;
             let base_dir = session.get_pixiv_base_dir()?;
             let base_dir_old = self.base_dir_old.as_ref().unwrap_or(base_dir);
             for ent in entries {
@@ -197,7 +197,7 @@ impl FileCanonicalizeArgs {
                     let filename = cur.split('/').last().unwrap();
                     let written_path = self.adjust(&cur, base_dir_old, &filename, base_dir).await?;
                     if !self.skip_db && !self.dry_run {
-                        crate::db::update_image_path(
+                        db.update_image_path(
                             ent.id,
                             &written_path
                                 .to_str()
@@ -212,16 +212,19 @@ impl FileCanonicalizeArgs {
         if !self.skip_fanbox_images {
             let base_dir = session.get_fanbox_base_dir()?;
             let base_dir_old = self.fanbox_base_dir_old.as_ref().unwrap_or(base_dir);
-            let entries = crate::db::query_fanbox_image_paths().await?;
+            let entries = db.query_fanbox_image_paths().await?;
             for ent in entries {
                 if let Some(cur) = ent.path {
-                    let filename =
-                        fanbox::get_download_spec(fanbox::FanboxAttachmentType::Image, &ent.id.0)
-                            .await?
-                            .1;
+                    let filename = fanbox::get_download_spec(
+                        db,
+                        fanbox::FanboxAttachmentType::Image,
+                        &ent.id.0,
+                    )
+                    .await?
+                    .1;
                     let written_path = self.adjust(&cur, base_dir_old, &filename, base_dir).await?;
                     if !self.skip_db && !self.dry_run {
-                        crate::db::update_fanbox_image_path(
+                        db.update_fanbox_image_path(
                             &ent.id.0,
                             &written_path
                                 .to_str()
@@ -236,16 +239,19 @@ impl FileCanonicalizeArgs {
         if !self.skip_fanbox_files {
             let base_dir = session.get_fanbox_base_dir()?;
             let base_dir_old = self.fanbox_base_dir_old.as_ref().unwrap_or(base_dir);
-            let entries = crate::db::query_fanbox_file_paths().await?;
+            let entries = db.query_fanbox_file_paths().await?;
             for ent in entries {
                 if let Some(cur) = ent.path {
-                    let filename =
-                        fanbox::get_download_spec(fanbox::FanboxAttachmentType::File, &ent.id.0)
-                            .await?
-                            .1;
+                    let filename = fanbox::get_download_spec(
+                        db,
+                        fanbox::FanboxAttachmentType::File,
+                        &ent.id.0,
+                    )
+                    .await?
+                    .1;
                     let written_path = self.adjust(&cur, base_dir_old, &filename, base_dir).await?;
                     if !self.skip_db && !self.dry_run {
-                        crate::db::update_fanbox_file_path(
+                        db.update_fanbox_file_path(
                             &ent.id.0,
                             &written_path
                                 .to_str()
@@ -362,15 +368,18 @@ impl FileCanonicalizeArgs {
 }
 
 impl Database {
-    pub async fn run(self, session: &Session) -> anyhow::Result<()> {
+    pub async fn run(self, session: &Session, dburl: &str) -> anyhow::Result<()> {
         match self.cmd {
-            DatabaseCmd::Setup => self.setup().await,
-            DatabaseCmd::File(file) => file.run(session).await,
+            DatabaseCmd::Setup => self.setup(dburl).await,
+            DatabaseCmd::File(file) => {
+                let db = crate::db::Database::load(dburl).await?;
+                file.run(session, &db).await
+            }
         }
     }
 
-    pub async fn setup(self) -> anyhow::Result<()> {
-        crate::db::setup_db().await?;
+    pub async fn setup(self, dburl: &str) -> anyhow::Result<()> {
+        crate::db::Database::setup(dburl).await?;
         Ok(())
     }
 }

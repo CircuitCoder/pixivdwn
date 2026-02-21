@@ -29,14 +29,20 @@ pub enum Command {
 }
 
 impl Command {
-    pub async fn run(self, session: &crate::config::Session) -> anyhow::Result<()> {
+    pub async fn run(self, session: &crate::config::Session, dburl: &str) -> anyhow::Result<()> {
+        if let Command::Database(cmd) = self {
+            return cmd.run(session, dburl).await;
+        }
+
+        let db = crate::db::Database::load(dburl).await?;
+
         match self {
-            Command::Bookmarks(cmd) => cmd.run(session).await,
-            Command::Illust(cmd) => cmd.run(session).await,
-            Command::Download(cmd) => cmd.run(session).await,
-            Command::Fanbox(cmd) => cmd.run(session).await,
-            Command::Query(cmd) => cmd.run().await,
-            Command::Database(cmd) => cmd.run(session).await,
+            Command::Bookmarks(cmd) => cmd.run(session, &db).await,
+            Command::Illust(cmd) => cmd.run(session, &db).await,
+            Command::Download(cmd) => cmd.run(session, &db).await,
+            Command::Fanbox(cmd) => cmd.run(session, &db).await,
+            Command::Query(cmd) => cmd.run(&db).await,
+            Command::Database(_) => unreachable!(),
         }
     }
 }

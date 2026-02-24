@@ -3,7 +3,10 @@ use futures::StreamExt;
 
 use crate::{
     data::fanbox::FanboxRequest,
-    util::{DatabasePathFormat, DownloadIdSrc, DownloadResult, TerminationCondition},
+    util::{
+        DatabasePathFormat, DownloadIdSrc, DownloadOverwriteBehavior, DownloadResult,
+        TerminationCondition,
+    },
 };
 
 #[derive(Args)]
@@ -226,19 +229,24 @@ impl FanboxDownloadArgs {
         id: &str,
     ) -> anyhow::Result<()> {
         let (url, filename) = get_download_spec(db, self.r#type, id).await?;
-        let DownloadResult {
+        let DownloadResult::Written {
             written_path,
             final_path,
             size,
+            ..
         } = crate::util::download_then_persist(
             FanboxRequest(session),
             session.get_fanbox_base_dir()?,
             &filename,
             self.database_path_format,
             &url,
+            DownloadOverwriteBehavior::Overwrite { old: None },
             self.progress,
         )
-        .await?;
+        .await?
+        else {
+            unreachable!()
+        };
         let updated = match self.r#type {
             FanboxAttachmentType::Image => {
                 let (width, height) = crate::util::get_image_dim(

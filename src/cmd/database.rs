@@ -194,6 +194,7 @@ impl FileCanonicalizeArgs {
             for ent in entries {
                 if let Some(cur) = ent.path {
                     // Use original filename for images
+                    // This also handles modified filenames (e.g. hash suffixes for older versions)
                     let filename = cur.split('/').last().unwrap();
                     let written_path = self.adjust(&cur, base_dir_old, &filename, base_dir).await?;
                     if !self.skip_db && !self.dry_run {

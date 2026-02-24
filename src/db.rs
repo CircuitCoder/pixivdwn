@@ -426,7 +426,7 @@ impl Database {
         Ok(update_type)
     }
 
-    pub async fn update_image(
+    pub async fn insert_image(
         &self,
         illust: u64,
         page: usize,
@@ -434,7 +434,7 @@ impl Database {
         path: &str,
         width: u64,
         height: u64,
-        ugoira_frames: Option<Vec<UgoiraFrame>>,
+        ugoira_frames: Option<&Vec<UgoiraFrame>>,
     ) -> anyhow::Result<()> {
         let illust = illust as i64;
         let page = page as i64;
@@ -445,15 +445,8 @@ impl Database {
             .transpose()?;
 
         sqlx::query!(
-            r#"INSERT INTO images (illust_id, page, url, path, download_date, width, height, ugoira_frames)
-            VALUES (?, ?, ?, ?, datetime('now', 'utc'), ?, ?, ?)
-            ON CONFLICT(illust_id, page) DO UPDATE SET
-                url=excluded.url,
-                path=excluded.path,
-                download_date=excluded.download_date,
-                width=excluded.width,
-                height=excluded.height,
-                ugoira_frames=excluded.ugoira_frames
+            r#"INSERT INTO images (illust_id, page, url, path, download_date, verified_date, width, height, ugoira_frames)
+            VALUES (?, ?, ?, ?, datetime('now', 'utc'), datetime('now', 'utc'), ?, ?, ?)
             "#,
             illust,
             page,
@@ -467,6 +460,38 @@ impl Database {
         .await?;
 
         Ok(())
+    }
+
+    pub async fn update_image_path_move(
+        &self,
+        orig_path: &str,
+        new_path: Option<&str>,
+    ) -> anyhow::Result<bool> {
+        if let Some(new_path) = new_path {
+            let ret = sqlx::query!(
+                r#"UPDATE images SET path = ? WHERE path = ?"#,
+                new_path,
+                orig_path,
+            )
+            .execute(&self.db)
+            .await?;
+            Ok(ret.rows_affected() > 0)
+        } else {
+            let ret = sqlx::query!(r#"DELETE FROM images WHERE path = ?"#, orig_path,)
+                .execute(&self.db)
+                .await?;
+            Ok(ret.rows_affected() > 0)
+        }
+    }
+
+    pub async fn update_image_path_refresh(&self, path: &str) -> anyhow::Result<bool> {
+        let ret = sqlx::query!(
+            r#"UPDATE images SET verified_date = datetime('now', 'utc') WHERE path = ?"#,
+            path,
+        )
+        .execute(&self.db)
+        .await?;
+        Ok(ret.rows_affected() > 0)
     }
 
     pub async fn get_illust_type(
@@ -483,18 +508,19 @@ impl Database {
         Ok(rec.map(|r| r.illust_type))
     }
 
-    pub async fn get_existing_pages<B: FromIterator<usize>>(
+    pub async fn get_image_existing_for(
         &self,
         illust_id: u64,
-    ) -> anyhow::Result<B> {
+    ) -> anyhow::Result<impl Iterator<Item = (usize, String)> + '_> {
         let illust_id = illust_id as i64;
+        // FIXME: only get the latest record per page
         let recs = sqlx::query!(
-            r#"SELECT page FROM images WHERE illust_id = ? ORDER BY page ASC"#,
+            r#"SELECT page, path FROM images WHERE illust_id = ? ORDER BY page ASC, download_date DESC"#,
             illust_id,
         )
         .fetch_all(&self.db)
         .await?;
-        Ok(recs.into_iter().map(|r| r.page as usize).collect())
+        Ok(recs.into_iter().map(|r| (r.page as usize, r.path)))
     }
 
     pub async fn query_raw(&self, sql: &str) -> anyhow::Result<Vec<SqliteRow>> {
@@ -787,7 +813,7 @@ impl Database {
             .into_iter()
             .map(|r| DownloadPathEntry {
                 id: (r.illust_id as u64, r.page as u64),
-                path: r.path,
+                path: Some(r.path),
             })
             .collect();
         Ok(recs)

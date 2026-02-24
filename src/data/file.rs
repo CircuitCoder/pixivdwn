@@ -2,6 +2,7 @@ use std::path::Path;
 
 use crate::data::{RequestArgumenter, RequestExt};
 use futures::StreamExt;
+use sha2::{Digest, Sha256};
 use tempfile::NamedTempFile;
 
 pub async fn download<W: std::io::Write, R: RequestArgumenter>(
@@ -9,7 +10,7 @@ pub async fn download<W: std::io::Write, R: RequestArgumenter>(
     url: &str,
     mut dst: W,
     show_progress: bool,
-) -> anyhow::Result<u64> {
+) -> anyhow::Result<(usize, [u8; 32])> {
     let fetch_ctx = crate::fetch::FetchCtxGuard::begin().await;
     let client = fetch_ctx.client();
 
@@ -44,13 +45,15 @@ pub async fn download<W: std::io::Write, R: RequestArgumenter>(
 
     let mut stream = resp.bytes_stream();
     let mut total_length = 0;
+    let mut digest = Sha256::new();
 
     while let Some(chunk) = stream.next().await {
         let chunk = chunk?;
+        digest.update(&chunk);
         dst.write_all(&chunk)?;
         if let Some(ref mut bar) = bar {
             bar.inc(chunk.len() as u64);
-            total_length += chunk.len() as u64;
+            total_length += chunk.len();
         }
     }
 
@@ -58,7 +61,7 @@ pub async fn download<W: std::io::Write, R: RequestArgumenter>(
         bar.finish();
     }
 
-    Ok(total_length)
+    Ok((total_length, digest.finalize().into()))
 }
 
 pub async fn download_to_tmp<R: RequestArgumenter>(
@@ -66,10 +69,10 @@ pub async fn download_to_tmp<R: RequestArgumenter>(
     base_dir: &Path,
     url: &str,
     show_progress: bool,
-) -> anyhow::Result<(NamedTempFile, u64)> {
+) -> anyhow::Result<(NamedTempFile, usize, [u8; 32])> {
     let mut tmp_file = NamedTempFile::with_prefix_in("pixivdwn_", base_dir)?;
     let mut buffered_file = std::io::BufWriter::new(tmp_file.as_file_mut());
-    let file_len = download(req_arg, url, &mut buffered_file, show_progress).await?;
+    let (file_len, digest) = download(req_arg, url, &mut buffered_file, show_progress).await?;
     drop(buffered_file);
-    Ok((tmp_file, file_len))
+    Ok((tmp_file, file_len, digest))
 }

@@ -10,6 +10,9 @@ pub enum QueryDownloadState {
     /// Only illustrations with missing downloaded pages
     NotFullyDownloaded,
 
+    /// Only illustrations which is newer than its downloaded contents
+    OutdatedDownloaded,
+
     /// Downloaded more than current page count
     ExtraDownloaded,
 
@@ -126,13 +129,19 @@ impl Query {
                   page_count {} (
                     SELECT COUNT(*) FROM images
                     WHERE illust_id = illusts.id
+                      {}
                   )
                 "#,
                 match download_state {
                     QueryDownloadState::FullyDownloaded => "<=",
-                    QueryDownloadState::NotFullyDownloaded => ">",
+                    QueryDownloadState::NotFullyDownloaded
+                    | QueryDownloadState::OutdatedDownloaded => ">",
                     QueryDownloadState::ExtraDownloaded => "<",
                     QueryDownloadState::ExactDownloaded => "=",
+                },
+                match download_state {
+                    QueryDownloadState::OutdatedDownloaded => "AND (fetched_at > verified_date)",
+                    _ => "",
                 }
             ));
         }

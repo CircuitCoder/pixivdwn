@@ -31,5 +31,6 @@ INSERT INTO images (illust_id, page, url, download_date, verified_date, path, wi
 	FROM images_old;
 
 CREATE INDEX images_illust_id_verified_date_page_idx ON images (illust_id, verified_date, page);
+CREATE INDEX images_illust_id_page_verified_date_idx ON images (illust_id, page, verified_date);
 
 DROP TABLE images_old;

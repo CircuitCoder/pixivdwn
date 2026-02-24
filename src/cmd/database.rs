@@ -197,12 +197,13 @@ impl FileCanonicalizeArgs {
                     // This also handles modified filenames (e.g. hash suffixes for older versions)
                     let filename = cur.split('/').last().unwrap();
                     let written_path = self.adjust(&cur, base_dir_old, &filename, base_dir).await?;
+                    let new_path_str = &written_path
+                        .to_str()
+                        .ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?;
                     if !self.skip_db && !self.dry_run {
-                        db.update_image_path(
-                            ent.id,
-                            &written_path
-                                .to_str()
-                                .ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?,
+                        db.update_image_path_move(
+                            &cur,
+                            Some(*new_path_str),
                         )
                         .await?;
                     }

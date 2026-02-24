@@ -515,7 +515,15 @@ impl Database {
         let illust_id = illust_id as i64;
         // FIXME: only get the latest record per page
         let recs = sqlx::query!(
-            r#"SELECT page, path FROM images WHERE illust_id = ? ORDER BY page ASC, download_date DESC"#,
+            r#"
+              SELECT
+                page,
+                path,
+                MAX(download_date) as "download_date: String"
+              FROM images
+              WHERE illust_id = ?
+              GROUP BY page
+              ORDER BY page ASC"#,
             illust_id,
         )
         .fetch_all(&self.db)
@@ -847,21 +855,6 @@ impl Database {
             })
             .collect();
         Ok(recs)
-    }
-
-    pub async fn update_image_path(&self, ident: (u64, u64), path: &str) -> anyhow::Result<bool> {
-        let illust_id = ident.0 as i64;
-        let page = ident.1 as i64;
-        let rows_updated = sqlx::query!(
-            "UPDATE images SET path = ? WHERE illust_id = ? AND page = ?",
-            path,
-            illust_id,
-            page
-        )
-        .execute(&self.db)
-        .await?
-        .rows_affected();
-        Ok(rows_updated > 0)
     }
 
     pub async fn update_fanbox_image_path(&self, id: &str, path: &str) -> anyhow::Result<bool> {

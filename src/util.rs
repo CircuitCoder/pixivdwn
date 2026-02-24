@@ -74,7 +74,7 @@ pub async fn download_then_persist<R: RequestArgumenter>(
     let (tmp_file, size, digest) =
         crate::data::file::download_to_tmp(req_arg, base_dir, url, show_progress).await?;
 
-    let mut final_path = PathBuf::from(base_dir);
+    let mut final_path = base_dir.canonicalize()?;
     final_path.push(filename);
 
     // Compare against old if requested
@@ -101,7 +101,7 @@ pub async fn download_then_persist<R: RequestArgumenter>(
             }
 
             // Now decide if old needs to move
-            let old_need_moving = final_path.canonicalize()? == old.canonicalize()?;
+            let old_need_moving = final_path == old.canonicalize()?;
             if old_need_moving {
                 // Changed, rename old file, append hash as suffix
                 let mut old_moved = old.clone();
@@ -141,7 +141,7 @@ pub async fn download_then_persist<R: RequestArgumenter>(
                 ));
             }
 
-            if old.canonicalize()? == final_path.canonicalize()? {
+            if final_path == old.canonicalize()? {
                 tokio::fs::remove_file(&final_path).await?;
                 tracing::info!("Removed: {}", final_path.display());
                 DownloadOldResult::Overwritten

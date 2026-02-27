@@ -51,9 +51,9 @@ pub async fn download<W: std::io::Write, R: RequestArgumenter>(
         let chunk = chunk?;
         digest.update(&chunk);
         dst.write_all(&chunk)?;
+        total_length += chunk.len();
         if let Some(ref mut bar) = bar {
             bar.inc(chunk.len() as u64);
-            total_length += chunk.len();
         }
     }
 

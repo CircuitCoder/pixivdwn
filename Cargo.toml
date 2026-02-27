@@ -1,7 +1,12 @@
 [package]
 name = "pixivdwn"
-version = "0.1.0"
+version = "0.1.0-alpha1"
 edition = "2024"
+description = "Incremental pixiv crawler/downloader"
+license = "MIT"
+documentation = "https://circuitcoder.github.io/pixivdwn"
+homepage = "https://github.com/CircuitCoder/pixivdwn"
+repository = "https://github.com/CircuitCoder/pixivdwn"
 
 [dependencies]
 anyhow = "1.0.99"

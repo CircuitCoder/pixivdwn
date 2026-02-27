@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM images WHERE path = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "03a24c09f9ff00d44186b7acb79584bb4edd10a980d7498c30c215761e06d60f"
+}

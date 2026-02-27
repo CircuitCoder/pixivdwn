@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT bookmark_id, illust_state as \"illust_state: IllustState\" FROM illusts WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "bookmark_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "illust_state: IllustState",
+        "ordinal": 1,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "2cf4ebcdf15979d5d5561bda3c54ac04d6f4da8a46999b84848bd8fd28ce75b0"
+}

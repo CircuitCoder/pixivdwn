@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id as \"id!\", post_id, idx, path FROM fanbox_images",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "post_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "idx",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "path",
+        "ordinal": 3,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "16a6bf8369cd6b06b880309421e4c1aeade483e0f08419cae8a0653ebb56d5c3"
+}

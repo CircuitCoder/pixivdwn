@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT updated_datetime as \"updated_datetime: chrono::DateTime<chrono::Utc>\", body IS NULL as \"body_null: bool\" FROM fanbox_posts WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "updated_datetime: chrono::DateTime<chrono::Utc>",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "body_null: bool",
+        "ordinal": 1,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "931bfe36481bea55be2418f08d7ceda25894160d052ace80afee5b0b9dae13f8"
+}

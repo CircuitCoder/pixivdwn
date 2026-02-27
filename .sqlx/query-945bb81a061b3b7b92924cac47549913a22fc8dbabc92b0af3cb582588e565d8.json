@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE fanbox_posts SET\n                    creator_id=?,\n                    title=?,\n                    body=?,\n                    is_body_rich=?,\n                    fee=?,\n                    published_datetime=datetime(?, 'utc'),\n                    updated_datetime=datetime(?, 'utc'),\n                    fetched_at=datetime('now', 'utc')\n                WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "945bb81a061b3b7b92924cac47549913a22fc8dbabc92b0af3cb582588e565d8"
+}

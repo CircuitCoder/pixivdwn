@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE fanbox_files SET path = ?, size = ?, downloaded_at = datetime('now', 'utc') WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "bfab1cb1c02bc217eb8ac2c363eeb58d941cbc692c33eae4ea1abef918de41be"
+}

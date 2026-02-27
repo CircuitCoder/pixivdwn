@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT illust_type as \"illust_type!: crate::data::pixiv::IllustType\" FROM illusts WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "illust_type!: crate::data::pixiv::IllustType",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "05b1b3cfda3b3a02f6efdd391a175146824f6591da751d60d5337d63556f0a5e"
+}

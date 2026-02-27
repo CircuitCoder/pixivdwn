@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM illust_tags WHERE illust_id = ? AND tag_id NOT IN (SELECT json_each.value FROM json_each(?))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "211881197e5643492eb34de3c19eec3a6665a37d3e449b0191be4bd03b31a6f3"
+}

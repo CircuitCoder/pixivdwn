@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE illusts SET last_successful_fetch = last_fetch, corrupted = FALSE WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "44e71c6c29007a45f45f39b10896d1a9aad7db4b94adba36d90b2bb357207cb4"
+}

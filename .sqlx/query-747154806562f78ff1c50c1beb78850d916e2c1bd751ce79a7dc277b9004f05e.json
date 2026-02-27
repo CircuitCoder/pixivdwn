@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT width, height FROM fanbox_images WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "width",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "height",
+        "ordinal": 1,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "747154806562f78ff1c50c1beb78850d916e2c1bd751ce79a7dc277b9004f05e"
+}

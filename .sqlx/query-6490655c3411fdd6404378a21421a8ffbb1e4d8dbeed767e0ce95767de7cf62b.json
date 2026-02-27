@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO illusts (\n                    id,\n                    title,\n                    author_id,\n                    create_date,\n                    update_date,\n                    x_restrict,\n                    ai_type,\n                    illust_state,\n                    bookmark_id,\n                    bookmark_private,\n                    illust_type,\n                    page_count,\n                    last_fetch\n                ) VALUES (\n                    ?, ?, ?, datetime(?, 'utc'), datetime(?, 'utc'), ?, ?, ?, ?, ?, ?, ?, datetime('now', 'utc')\n                )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 12
+    },
+    "nullable": []
+  },
+  "hash": "6490655c3411fdd6404378a21421a8ffbb1e4d8dbeed767e0ce95767de7cf62b"
+}

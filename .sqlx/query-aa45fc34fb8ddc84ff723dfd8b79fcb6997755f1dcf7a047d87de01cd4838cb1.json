@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT OR IGNORE INTO fanbox_files (\n                id,\n                post_id,\n                name,\n                url,\n                size,\n                ext,\n                idx\n            ) VALUES (\n                ?, ?, ?, ?, ?, ?, ?\n            )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "aa45fc34fb8ddc84ff723dfd8b79fcb6997755f1dcf7a047d87de01cd4838cb1"
+}

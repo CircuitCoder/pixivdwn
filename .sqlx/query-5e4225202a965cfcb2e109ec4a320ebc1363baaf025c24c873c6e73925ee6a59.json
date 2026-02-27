@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO images (illust_id, page, url, path, download_date, verified_date, width, height, ugoira_frames)\n            VALUES (?, ?, ?, ?, datetime('now', 'utc'), datetime('now', 'utc'), ?, ?, ?)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "5e4225202a965cfcb2e109ec4a320ebc1363baaf025c24c873c6e73925ee6a59"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE illusts SET\n                    content_desc=?,\n                    content_is_howto=?,\n                    content_is_original=?,\n                    last_successful_content_fetch = last_fetch\n                WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "c155e22f7a8b764538718fc59177da0a893e5e62cae376916b66d00e65bb43fa"
+}

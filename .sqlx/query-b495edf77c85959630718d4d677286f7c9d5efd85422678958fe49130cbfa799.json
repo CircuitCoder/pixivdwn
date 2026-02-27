@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE images SET verified_date = datetime('now', 'utc') WHERE path = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "b495edf77c85959630718d4d677286f7c9d5efd85422678958fe49130cbfa799"
+}

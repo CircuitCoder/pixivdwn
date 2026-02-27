@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "\n              SELECT\n                page,\n                path,\n                MAX(download_date) as \"download_date: String\"\n              FROM images\n              WHERE illust_id = ?\n              GROUP BY page\n              ORDER BY page ASC",
+  "describe": {
+    "columns": [
+      {
+        "name": "page",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "path",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "download_date: String",
+        "ordinal": 2,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "9001934e07cd81ab5701ce7f6d8f0111733e885009f292dd92594b188c184f1c"
+}

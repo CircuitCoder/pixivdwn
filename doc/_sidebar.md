@@ -1,4 +1,7 @@
-- Getting Started
-  - [Quickstart](README.md)
+- **Getting Started**
   - [Installation](install.md)
   - [Cookbook](cookbook.md)
+- **Guides**
+  - [Sync](sync.md)
+  - [Download](download.md)
+  - [Query](query.md)

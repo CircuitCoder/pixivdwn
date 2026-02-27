@@ -13,44 +13,44 @@ struct Args {
     #[arg(long)]
     /// Pixiv Cookie, not including the "PHPSESSID=" prefix
     /// Can also be set via the PIXIV_COOKIE environment variable
-    #[arg(long)]
+    #[arg(long, hide_short_help = true)]
     pixiv_cookie: Option<String>,
 
     /// Fanbox cookie, not including the "FANBOXSESSID=" prefix
     /// Can also be set via the FANBOX_COOKIE environment variable
-    #[arg(long)]
+    #[arg(long, hide_short_help = true)]
     fanbox_cookie: Option<String>,
 
     /// Full Fanbox headers, including other ones such as UA and full cookie
     /// Can also be set via the FANBOX_HEADER_FULL environment variable
     /// Overrides `fanbox_cookie` if both are set
-    #[arg(long)]
+    #[arg(long, hide_short_help = true)]
     fanbox_header_full: Option<String>,
 
     /// Base directory to save / lookup pixiv illustrations
     ///
     /// The illustrations will be saved as `<base_dir>/<illust_id>_p<page>.<ext>`
     /// Can also be set via the PIXIV_BASE_DIR environment variable
-    #[arg(long)]
+    #[arg(long, hide_short_help = true)]
     pixiv_base_dir: Option<PathBuf>,
 
     /// Base directory to save / lookup fanbox illustrations
     ///
     /// The illustrations will be saved as `<base_dir>/<post_id>_<idx>_<image_id>[_<name>].<ext>`
     /// Can also be set via the FANBOX_BASE_DIR environment variable
-    #[arg(long)]
+    #[arg(long, hide_short_help = true)]
     fanbox_base_dir: Option<PathBuf>,
 
     /// Database URL, Can also be set via the DATABASE_URL environment variable
-    #[arg(long)]
+    #[arg(long, hide_short_help = true)]
     database_url: Option<String>,
 
     /// Override fetch delay (ms)
-    #[arg(long, default_value_t = 2500)]
+    #[arg(long, default_value_t = 2500, hide_short_help = true)]
     fetch_delay: i64,
 
     /// Override fetch delay random variance (ms)
-    #[arg(long, default_value_t = 500)]
+    #[arg(long, default_value_t = 500, hide_short_help = true)]
     fetch_delay_var: i64,
 
     #[command(subcommand)]

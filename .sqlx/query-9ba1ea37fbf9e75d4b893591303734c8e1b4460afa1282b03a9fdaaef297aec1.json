@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT size FROM fanbox_files WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "size",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9ba1ea37fbf9e75d4b893591303734c8e1b4460afa1282b03a9fdaaef297aec1"
+}

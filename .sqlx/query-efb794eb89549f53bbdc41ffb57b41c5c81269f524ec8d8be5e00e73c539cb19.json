@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE illusts SET\n                    title=?,\n                    author_id=?,\n                    create_date=datetime(?, 'utc'),\n                    update_date=datetime(?, 'utc'),\n                    x_restrict=?,\n                    ai_type=?,\n                    illust_state=?,\n                    bookmark_id=?,\n                    bookmark_private=?,\n                    illust_type=?,\n                    page_count=?\n                WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 12
+    },
+    "nullable": []
+  },
+  "hash": "efb794eb89549f53bbdc41ffb57b41c5c81269f524ec8d8be5e00e73c539cb19"
+}

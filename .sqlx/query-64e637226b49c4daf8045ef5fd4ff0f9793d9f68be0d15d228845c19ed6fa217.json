@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE fanbox_files SET path = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "64e637226b49c4daf8045ef5fd4ff0f9793d9f68be0d15d228845c19ed6fa217"
+}

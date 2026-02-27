@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE illusts SET last_fetch = datetime('now', 'utc') WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "6768a4f027fbf7b74807dac1eea6e06ccea04c72ddb1b980e25ff2da0a387e6f"
+}

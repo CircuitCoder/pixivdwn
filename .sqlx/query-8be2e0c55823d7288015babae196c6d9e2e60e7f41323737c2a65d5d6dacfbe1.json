@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT url, name, post_id, ext, idx FROM fanbox_files WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "url",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "post_id",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "ext",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "idx",
+        "ordinal": 4,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8be2e0c55823d7288015babae196c6d9e2e60e7f41323737c2a65d5d6dacfbe1"
+}

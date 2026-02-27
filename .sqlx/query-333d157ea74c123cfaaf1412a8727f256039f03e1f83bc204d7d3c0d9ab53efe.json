@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO fanbox_posts (\n                    id,\n                    creator_id,\n                    title,\n                    body,\n                    is_body_rich,\n                    fee,\n                    published_datetime,\n                    updated_datetime,\n                    fetched_at\n                ) VALUES (\n                    ?, ?, ?, ?, ?, ?, datetime(?, 'utc'), datetime(?, 'utc'), datetime('now', 'utc')\n                )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "333d157ea74c123cfaaf1412a8727f256039f03e1f83bc204d7d3c0d9ab53efe"
+}

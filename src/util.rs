@@ -1,10 +1,12 @@
 use std::{
+    fs::File,
     io::{BufRead, Read},
     path::{Path, PathBuf},
     str::FromStr,
 };
 
 use clap::Args;
+use sha2::{Digest, Sha256};
 use sqlx::{Column, Row, TypeInfo, sqlite::SqliteRow};
 
 use crate::data::RequestArgumenter;
@@ -27,10 +29,37 @@ pub enum DatabasePathFormat {
     Absolute,
 }
 
-pub struct DownloadResult {
-    pub written_path: PathBuf,
-    pub final_path: PathBuf,
-    pub size: u64,
+pub enum DownloadOverwriteBehavior {
+    Compare {
+        /// The old file to compare against
+        old: PathBuf,
+    },
+    Overwrite {
+        /// Optionally, the old file to overwrite
+        old: Option<PathBuf>,
+    },
+    Free, // No file present
+}
+
+pub enum DownloadOldResult {
+    Stale,          // Old file unchanged, or nonexistent
+    Overwritten,    // Old file is overwritten
+    Moved(PathBuf), // Old file is moved away
+}
+
+pub enum DownloadResult {
+    Written {
+        // FIXME: move written_path and fmt into caller to handle
+        written_path: PathBuf,
+        final_path: PathBuf,
+        size: usize,
+
+        old: DownloadOldResult,
+    },
+
+    Unchanged {
+        size: usize,
+    },
 }
 
 pub async fn download_then_persist<R: RequestArgumenter>(
@@ -39,15 +68,99 @@ pub async fn download_then_persist<R: RequestArgumenter>(
     filename: &str,
     fmt: DatabasePathFormat,
     url: &str,
+    overwrite_behavior: DownloadOverwriteBehavior,
     show_progress: bool,
 ) -> anyhow::Result<DownloadResult> {
-    let (tmp_file, size) =
+    let (tmp_file, size, digest) =
         crate::data::file::download_to_tmp(req_arg, base_dir, url, show_progress).await?;
 
-    let mut final_path = PathBuf::from(base_dir);
+    let mut final_path = base_dir.canonicalize()?;
     final_path.push(filename);
+
+    // Compare against old if requested
+    let old = match overwrite_behavior {
+        DownloadOverwriteBehavior::Compare { old } => {
+            if !old.is_absolute() {
+                return Err(anyhow::anyhow!(
+                    "Old file path must be absolute for comparison"
+                ));
+            }
+
+            // Compute hash for the old file
+            let old_digest = tokio::task::block_in_place(|| -> anyhow::Result<[u8; 32]> {
+                let mut old_file = File::open(&old)?;
+                let mut old_digest = Sha256::new();
+                let mut old_reader = std::io::BufReader::new(&mut old_file);
+                std::io::copy(&mut old_reader, &mut old_digest)?;
+                Ok(old_digest.finalize().into())
+            })?;
+
+            if old_digest == digest {
+                // No change, skip writing
+                return Ok(DownloadResult::Unchanged { size });
+            }
+
+            // Now decide if old needs to move
+            let old_need_moving = final_path == old.canonicalize()?;
+            if old_need_moving {
+                // Changed, rename old file, append hash as suffix
+                let mut old_moved = old.clone();
+                let old_ext = old.extension();
+                old_moved.set_extension(hex::encode(old_digest));
+                if let Some(ext) = old_ext {
+                    old_moved.add_extension(ext);
+                }
+
+                // Almost certainly that they are on the same filesystem
+                tracing::info!("Moving: {} -> {}", old.display(), old_moved.display());
+                tokio::fs::rename(&old, &old_moved).await?;
+                DownloadOldResult::Moved(old_moved)
+            } else {
+                DownloadOldResult::Stale
+            }
+        }
+        DownloadOverwriteBehavior::Overwrite { old: None } => {
+            match tokio::fs::remove_file(&final_path).await {
+                Ok(_) => {
+                    tracing::info!("Removed: {}", final_path.display());
+                    DownloadOldResult::Overwritten
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    // No existing file, just write
+                    DownloadOldResult::Stale
+                }
+                Err(e) => {
+                    return Err(e.into());
+                }
+            }
+        }
+        DownloadOverwriteBehavior::Overwrite { old: Some(old) } => {
+            if !old.is_absolute() {
+                return Err(anyhow::anyhow!(
+                    "Old file path must be absolute for overwriting"
+                ));
+            }
+
+            if final_path == old.canonicalize()? {
+                tokio::fs::remove_file(&final_path).await?;
+                tracing::info!("Removed: {}", final_path.display());
+                DownloadOldResult::Overwritten
+            } else {
+                DownloadOldResult::Stale
+            }
+        }
+        DownloadOverwriteBehavior::Free => DownloadOldResult::Stale,
+    };
+
+    if tokio::fs::try_exists(&final_path).await? {
+        return Err(anyhow::anyhow!(
+            "Final path already exists and not moved / overwritten: {}",
+            final_path.display()
+        ));
+    }
+
     tmp_file.persist(&final_path)?;
-    tracing::info!("Saved to {}", final_path.display());
+    tracing::debug!("Saved to {}", final_path.display());
 
     let written_path = match fmt {
         DatabasePathFormat::Inline => PathBuf::from(filename),
@@ -55,10 +168,12 @@ pub async fn download_then_persist<R: RequestArgumenter>(
         DatabasePathFormat::Absolute => final_path.canonicalize()?,
     };
 
-    Ok(DownloadResult {
+    Ok(DownloadResult::Written {
         written_path,
         final_path,
         size,
+
+        old,
     })
 }
 

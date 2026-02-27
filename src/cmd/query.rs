@@ -2,13 +2,18 @@ use clap::Args;
 
 use crate::{data::pixiv::IllustState, util::db_row_to_json};
 
-#[derive(clap::ValueEnum, Clone, Copy)]
+#[derive(clap::ValueEnum, Clone, Copy, PartialEq, Eq)]
 pub enum QueryDownloadState {
     /// Only fully downloaded illustrations
     FullyDownloaded,
 
     /// Only illustrations with missing downloaded pages
     NotFullyDownloaded,
+
+    /// Only illustrations which is newer than its downloaded contents
+    /// Requires that the illust has at least one successful fetch
+    /// Often this implies that state = Normal
+    OutdatedDownloaded,
 
     /// Downloaded more than current page count
     ExtraDownloaded,
@@ -121,18 +126,32 @@ impl Query {
             // This is a little more complex. We need to query the downloaded image table
             // to get the number of downloaded pages, and compare with the fetched number of pages.
 
+            // Actually, now we need a subquery + group by to select the image row with maximum verified_date
+
+            // Implicitly
+            if download_state == QueryDownloadState::OutdatedDownloaded {
+                wheres.push("update_date IS NOT NULL".to_string());
+            }
+
             wheres.push(format!(
                 r#"
                   page_count {} (
-                    SELECT COUNT(*) FROM images
-                    WHERE illust_id = illusts.id
+                    SELECT COUNT(DISTINCT page) FROM images
+                    WHERE
+                      illust_id = illusts.id
+                      {}
                   )
                 "#,
                 match download_state {
                     QueryDownloadState::FullyDownloaded => "<=",
-                    QueryDownloadState::NotFullyDownloaded => ">",
+                    QueryDownloadState::NotFullyDownloaded
+                    | QueryDownloadState::OutdatedDownloaded => ">",
                     QueryDownloadState::ExtraDownloaded => "<",
                     QueryDownloadState::ExactDownloaded => "=",
+                },
+                match download_state {
+                    QueryDownloadState::OutdatedDownloaded => "AND (illusts.update_date > verified_date)",
+                    _ => "",
                 }
             ));
         }

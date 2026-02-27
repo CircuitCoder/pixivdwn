@@ -35,21 +35,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install system dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
-
-      - name: Install SQLite (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          if (-not $env:VCPKG_INSTALLATION_ROOT) { throw "VCPKG_INSTALLATION_ROOT is not set" }
-          vcpkg install sqlite3:${{ matrix.vcpkg_triplet }}
-          $root = $env:VCPKG_INSTALLATION_ROOT
-          echo "SQLITE3_LIB_DIR=$root/installed/${{ matrix.vcpkg_triplet }}/lib" >> $env:GITHUB_ENV
-          echo "SQLITE3_INCLUDE_DIR=$root/installed/${{ matrix.vcpkg_triplet }}/include" >> $env:GITHUB_ENV
-          echo "SQLITE3_STATIC=1" >> $env:GITHUB_ENV
-
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:

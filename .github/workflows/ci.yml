@@ -56,7 +56,9 @@ jobs:
           target: ${{ matrix.target }}
 
       - name: Build release binary
-        run: SQLX_OFFLINE=true cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }}
+        env:
+          SQLX_OFFLINE: true
 
       - name: Rename binary (Unix)
         if: runner.os != 'Windows'

@@ -2,7 +2,7 @@
 
 ![Crates.io Version](https://img.shields.io/crates/v/pixivdwn)
 
-`pixivdwn` is an "incremental" Pixiv downloader, in the sense that it tries to cache fetched information, patch them during update, and allowing powerful querying. It is optimized to run as an unattended periodic background job. It keeps track of illustrations in a local database, and enables the user to selectively download some of the illustrations.
+`pixivdwn` is an "incremental" Pixiv downloader, in the sense that it tries to cache fetched information, patch them during update, and allow powerful querying. It is optimized to run as an unattended periodic background job. It keeps track of illustrations in a local database, and enables the user to selectively download some of the illustrations.
 
 The two basic tracked entities are "illustrations" and "images", which roughly correspond to galleries and individual image files. The primary way to use `pixivdwn` is to first sync illustration metadata into the local database through various means (e.g. an illustrator's works, a user's bookmarks, an individual illustration, etc.). Then, we can query about the status of the illustrations' images, and download them if they are currently outdated or missing. Fanbox is analogous.
 

@@ -22,3 +22,7 @@ sqlx database setup
 It's also a good idea to run `sqlx database reset` whenever you pull or switch branches. If you want to keep the existing data and is sure that the database schema is only updated, you can use `sqlx migrate run`.
 
 One more thing: `sqlx` can uses "offline" information pre-generated to type-check `query!` macros without a live database connection. This is what CI uses to compile the code without setting up a live database. So if you added new migrations, please run `cargo sqlx prepare` and commit the changes in `/.sqlx` as well.
+
+## Database layout
+
+The database is defined by migrations. Unfortunately, it does not show a clear representation of the most up-to-date database schema. This is the overview of the current database layout (as of the last time someone remembered to update this file):

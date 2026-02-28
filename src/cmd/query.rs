@@ -5,21 +5,21 @@ use crate::{data::pixiv::IllustState, util::db_row_to_json};
 #[derive(clap::ValueEnum, Clone, Copy, PartialEq, Eq)]
 pub enum QueryDownloadState {
     /// Only fully downloaded illustrations
-    FullyDownloaded,
+    Full,
 
     /// Only illustrations with missing downloaded pages
-    NotFullyDownloaded,
+    Missing,
 
     /// Only illustrations which is newer than its downloaded contents
     /// Requires that the illust has at least one successful fetch
     /// Often this implies that state = Normal
-    OutdatedDownloaded,
+    Outdated,
 
     /// Downloaded more than current page count
-    ExtraDownloaded,
+    Extra,
 
     /// Exactly downloaded current page count
-    ExactDownloaded,
+    Exact,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy)]
@@ -129,7 +129,7 @@ impl Query {
             // Actually, now we need a subquery + group by to select the image row with maximum verified_date
 
             // Implicitly
-            if download_state == QueryDownloadState::OutdatedDownloaded {
+            if download_state == QueryDownloadState::Outdated {
                 wheres.push("update_date IS NOT NULL".to_string());
             }
 
@@ -143,14 +143,14 @@ impl Query {
                   )
                 "#,
                 match download_state {
-                    QueryDownloadState::FullyDownloaded => "<=",
-                    QueryDownloadState::NotFullyDownloaded
-                    | QueryDownloadState::OutdatedDownloaded => ">",
-                    QueryDownloadState::ExtraDownloaded => "<",
-                    QueryDownloadState::ExactDownloaded => "=",
+                    QueryDownloadState::Full => "<=",
+                    QueryDownloadState::Missing
+                    | QueryDownloadState::Outdated => ">",
+                    QueryDownloadState::Extra => "<",
+                    QueryDownloadState::Exact => "=",
                 },
                 match download_state {
-                    QueryDownloadState::OutdatedDownloaded => "AND (illusts.update_date > verified_date)",
+                    QueryDownloadState::Outdated => "AND (illusts.update_date < verified_date)",
                     _ => "",
                 }
             ));

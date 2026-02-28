@@ -12,7 +12,7 @@ echo -e "114\n514" | pixivdwn download -l -
 A frequently used pattern is downloading the images of a illustration that either has not finished downloading, or was updated since some of the downloaded files. This pattern can be achieved by:
 
 ```bash
-pixivdwn query -d outdated-downloaded | pixivdwn download -l -
+pixivdwn query -d outdated | pixivdwn download -l -
 ```
 
 Updated illustrations can have downloaded but outdated images. The default behavior of `pixivdwn download` for these images is to re-download and verify if the file have changed. If not, the timestamp on the image is bumped to the current time. If changed, the old file will be preserved with a suffix containing it's hash. You can use `--on-existing` option to change the behavior. Check `pixivdwn download help`

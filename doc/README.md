@@ -30,5 +30,5 @@ pixivdwn bookmarks -t meow --term on-hit
 
 # Query for all illustrations with bookmark tag "meow" that has updated / unfetched images
 # and download them into ./illusts directory
-pixivdwn query -b meow -d outdated-downloaded -o id-desc | pixivdwn download -l - -p
+pixivdwn query -b meow -d outdated -o id-desc | pixivdwn download -l - -p
 ```

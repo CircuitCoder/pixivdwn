@@ -126,6 +126,7 @@ impl Database {
         let opts: SqliteConnectOptions = url.parse()?;
         let opts = opts.create_if_missing(true);
         let db = SqlitePool::connect_with(opts).await?;
+        MIGRATOR.run(&db).await?;
         Ok(Database { db })
     }
 

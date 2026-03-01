@@ -189,14 +189,30 @@ impl Download {
                         filename,
                         url
                     );
-                    assert!(filename.starts_with(format!("{}_p{}.", id, idx).as_str()));
+                    // Parse filename
+                    // As of 2025-12, the filename format is:
+                    // <illust-id>[-<hash>]_p<page>.<ext>
+                    // The hash part might be used to handle same-day reuploads, but we're not sure
+                    let filename_re = regex::Regex::new(&format!(
+                        r"^{}(-[0-9a-f]+)?_p{}\.\w+$",
+                        id,
+                        idx, // Page index starts with 0
+                    ))?;
+                    if !filename_re.is_match(filename) {
+                        return Err(anyhow::anyhow!("Unexpected filename format: {}", filename));
+                    }
                 }
                 DownloadSource::UgoiraMeta(ref meta) => {
                     tracing::info!("Ugoira pack {}: {} from {}", filename, meta.mime_type, url);
-                    assert!(
-                        filename.starts_with(format!("{}_ugoira", id).as_str())
-                            && filename.ends_with(".zip")
-                    );
+
+                    // We assume ugoira can also have the hash component, although not seen in the wild.
+                    let filename_re = regex::Regex::new(&format!(
+                        r"^{}(-[0-9a-f]+)?_ugoira\.zip$",
+                        id,
+                    ))?;
+                    if !filename_re.is_match(filename) {
+                        return Err(anyhow::anyhow!("Unexpected filename format: {}", filename));
+                    }
                 }
             }
 

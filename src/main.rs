@@ -9,6 +9,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 #[derive(Parser)]
+#[command(version, about)]
 struct Args {
     #[arg(long)]
     /// Pixiv Cookie, not including the "PHPSESSID=" prefix

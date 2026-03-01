@@ -5,6 +5,7 @@
   - [Sync](sync.md)
   - [Download](download.md)
   - [Query](query.md)
+  - [Fanbox](fanbox.md)
 - **Advanced**
   - [Backup](backup.md)
   - [Database Plumbing](plumbing.md)

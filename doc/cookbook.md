@@ -22,3 +22,11 @@ pixivdwn query -s unlisted | pixivdwn illust -l -
 ```bash
 pixivdwn query -t tag1 -b bookmark-tag2
 ```
+
+## Sync all supported fanbox users, then download all missing attachments
+
+```bash
+pixivdwn fanbox sync --term on-hit
+pixivdwn fanbox attachment image --downloaded false | pixivdwn fanbox download image -p -l -
+pixivdwn fanbox attachment file --downloaded false | pixivdwn fanbox download file -p -l -
+```

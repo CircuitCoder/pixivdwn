@@ -207,7 +207,7 @@ impl Download {
 
                     // We assume ugoira can also have the hash component, although not seen in the wild.
                     let filename_re = regex::Regex::new(&format!(
-                        r"^{}(-[0-9a-f]+)?_ugoira\.zip$",
+                        r"^{}(-[0-9a-f]+)?_ugoira([0-9]+x[0-9]+)\.zip$",
                         id,
                     ))?;
                     if !filename_re.is_match(filename) {

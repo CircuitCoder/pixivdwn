@@ -1,6 +1,6 @@
 [package]
 name = "pixivdwn"
-version = "0.1.0-alpha1"
+version = "0.2.0-alpha1"
 edition = "2024"
 description = "Incremental pixiv crawler/downloader"
 license = "MIT"

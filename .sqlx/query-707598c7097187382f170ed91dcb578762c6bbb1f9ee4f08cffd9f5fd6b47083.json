@@ -1,0 +1,45 @@
+{
+  "db_name": "SQLite",
+  "query": "\n              SELECT\n                page as \"page!: i64\",\n                path as \"path!: String\",\n                MAX(download_date) as \"download_date: String\"\n              FROM images\n              WHERE illust_id = ?\n              GROUP BY page\n              ORDER BY page ASC",
+  "describe": {
+    "columns": [
+      {
+        "name": "page!: i64",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "images",
+            "name": "page"
+          }
+        }
+      },
+      {
+        "name": "path!: String",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "images",
+            "name": "path"
+          }
+        }
+      },
+      {
+        "name": "download_date: String",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "707598c7097187382f170ed91dcb578762c6bbb1f9ee4f08cffd9f5fd6b47083"
+}

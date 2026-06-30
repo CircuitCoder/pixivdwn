@@ -6,12 +6,24 @@
       {
         "name": "bookmark_id",
         "ordinal": 0,
-        "type_info": "Integer"
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "illusts",
+            "name": "bookmark_id"
+          }
+        }
       },
       {
         "name": "illust_state: IllustState",
         "ordinal": 1,
-        "type_info": "Integer"
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "illusts",
+            "name": "illust_state"
+          }
+        }
       }
     ],
     "parameters": {

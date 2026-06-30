@@ -6,27 +6,57 @@
       {
         "name": "url",
         "ordinal": 0,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "fanbox_files",
+            "name": "url"
+          }
+        }
       },
       {
         "name": "name",
         "ordinal": 1,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "fanbox_files",
+            "name": "name"
+          }
+        }
       },
       {
         "name": "post_id",
         "ordinal": 2,
-        "type_info": "Integer"
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "fanbox_files",
+            "name": "post_id"
+          }
+        }
       },
       {
         "name": "ext",
         "ordinal": 3,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "fanbox_files",
+            "name": "ext"
+          }
+        }
       },
       {
         "name": "idx",
         "ordinal": 4,
-        "type_info": "Integer"
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "fanbox_files",
+            "name": "idx"
+          }
+        }
       }
     ],
     "parameters": {

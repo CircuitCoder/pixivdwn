@@ -6,12 +6,19 @@
       {
         "name": "updated_datetime: chrono::DateTime<chrono::Utc>",
         "ordinal": 0,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "fanbox_posts",
+            "name": "updated_datetime"
+          }
+        }
       },
       {
         "name": "body_null: bool",
         "ordinal": 1,
-        "type_info": "Integer"
+        "type_info": "Integer",
+        "origin": "Expression"
       }
     ],
     "parameters": {

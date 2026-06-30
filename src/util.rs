@@ -89,10 +89,10 @@ pub async fn download_then_persist<R: RequestArgumenter>(
             // Compute hash for the old file
             let old_digest = tokio::task::block_in_place(|| -> anyhow::Result<[u8; 32]> {
                 let mut old_file = File::open(&old)?;
-                let mut old_digest = Sha256::new();
+                let mut old_digest = digest_io::IoWrapper(Sha256::new());
                 let mut old_reader = std::io::BufReader::new(&mut old_file);
                 std::io::copy(&mut old_reader, &mut old_digest)?;
-                Ok(old_digest.finalize().into())
+                Ok(old_digest.0.finalize().into())
             })?;
 
             if old_digest == digest {

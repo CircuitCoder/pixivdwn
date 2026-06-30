@@ -2,9 +2,7 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 use sqlx::{
-    SqlitePool,
-    migrate::{Migrate, Migrator},
-    sqlite::{SqliteConnectOptions, SqliteRow},
+    SqlSafeStr, SqlitePool, migrate::{Migrate, Migrator}, sqlite::{SqliteConnectOptions, SqliteRow},
 };
 
 use crate::data::{
@@ -87,14 +85,17 @@ pub struct Database {
     db: SqlitePool,
 }
 
+
+const DEFAULT_MIGRATION_TABLE: &'static str = "_sqlx_migrations";
+
 impl Database {
     pub async fn load(url: &str) -> anyhow::Result<Database> {
         let db = SqlitePool::connect(&url).await?;
 
         let mut conn = db.acquire().await?;
-        conn.ensure_migrations_table().await?;
+        conn.ensure_migrations_table(DEFAULT_MIGRATION_TABLE).await?;
         let applied_migrations: HashMap<_, _> = conn
-            .list_applied_migrations()
+            .list_applied_migrations(DEFAULT_MIGRATION_TABLE)
             .await?
             .into_iter()
             .map(|e| (e.version, e.checksum))
@@ -518,8 +519,8 @@ impl Database {
         let recs = sqlx::query!(
             r#"
               SELECT
-                page,
-                path,
+                page as "page!: i64",
+                path as "path!: String",
                 MAX(download_date) as "download_date: String"
               FROM images
               WHERE illust_id = ?
@@ -532,7 +533,8 @@ impl Database {
         Ok(recs.into_iter().map(|r| (r.page as usize, r.path)))
     }
 
-    pub async fn query_raw(&self, sql: &str) -> anyhow::Result<Vec<SqliteRow>> {
+    // TODO: change to query builder
+    pub async fn query_raw(&self, sql: impl SqlSafeStr) -> anyhow::Result<Vec<SqliteRow>> {
         let result = sqlx::query(sql).fetch_all(&self.db).await?;
         Ok(result)
     }

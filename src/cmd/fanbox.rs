@@ -1,5 +1,6 @@
 use clap::{Args, Subcommand};
 use futures::StreamExt;
+use sqlx::AssertSqlSafe;
 
 use crate::{
     data::fanbox::FanboxRequest, util::{
@@ -416,7 +417,7 @@ impl FanboxAttachmentArgs {
             return Ok(());
         }
 
-        let result = db.query_raw(&sql).await?;
+        let result = db.query_raw(AssertSqlSafe(sql)).await?;
         use sqlx::Row;
 
         for row in result {

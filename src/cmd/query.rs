@@ -1,4 +1,5 @@
 use clap::Args;
+use sqlx::AssertSqlSafe;
 
 use crate::{data::pixiv::IllustState, util::db_row_to_json};
 
@@ -227,7 +228,7 @@ impl Query {
             return Ok(());
         }
 
-        let result = db.query_raw(&sql).await?;
+        let result = db.query_raw(AssertSqlSafe(sql)).await?;
         use sqlx::Row;
 
         match self.format {

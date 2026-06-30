@@ -2,8 +2,7 @@ use clap::{Args, Subcommand};
 use futures::StreamExt;
 
 use crate::{
-    data::fanbox::FanboxRequest,
-    util::{
+    data::fanbox::FanboxRequest, util::{
         DatabasePathFormat, DownloadIdSrc, DownloadOverwriteBehavior, DownloadResult,
         TerminationCondition,
     },
@@ -22,14 +21,21 @@ pub enum FanboxAttachmentType {
 }
 
 #[derive(Args)]
-#[group(required = false, multiple = false)]
 pub struct FanboxSyncSrc {
     /// ID of the Fanbox creator. If given, sync all posts from this creator.
-    creator: Option<String>,
+    creator: Vec<String>,
 
     /// ID of a specific post. If given, only sync this one post.
     #[arg(short, long)]
     post: Option<u64>,
+
+    /// Disable supported creators
+    #[arg(short, long)]
+    no_supported: bool,
+
+    /// Enabled followed creators
+    #[arg(short, long)]
+    followed: bool,
 }
 
 #[derive(Args)]
@@ -158,23 +164,32 @@ impl FanboxSyncArgs {
         Ok(())
     }
 
-    async fn sync_all(
+    async fn sync_creators(
         &self,
         session: &crate::config::Session,
         db: &crate::db::Database,
     ) -> anyhow::Result<()> {
-        let creators = crate::data::fanbox::fetch_supporting_list(session).await?;
-        for creator in creators {
+        let mut creators: Vec<_> = self.src.creator.iter().map(|c| (None, c.clone())).collect();
+        if !self.src.no_supported {
+            let supported = crate::data::fanbox::fetch_supporting_list(session).await?;
+            creators.extend(supported.into_iter().map(|e| (e.creator.user, e.creator.creator_id)));
+        }
+
+        if self.src.followed {
+            let followed = crate::data::fanbox::fetch_following_list(session).await?;
+            creators.extend(followed.into_iter().map(|e| (e.user, e.creator_id)));
+        }
+
+        for (user, id) in creators {
             tracing::info!(
                 "Syncing creator {} ({})",
-                creator
-                    .user
+                user
                     .as_ref()
                     .map(|e| e.name.as_str())
                     .unwrap_or("?"),
-                creator.creator_id
+                id
             );
-            self.sync_creator(session, db, &creator.creator_id).await?;
+            self.sync_creator(session, db, &id).await?;
         }
         Ok(())
     }
@@ -184,13 +199,11 @@ impl FanboxSyncArgs {
         session: &crate::config::Session,
         db: &crate::db::Database,
     ) -> anyhow::Result<()> {
+        self.sync_creators(session, db).await?;
         if let Some(p) = self.src.post {
-            self.sync_post(session, db, p).await
-        } else if let Some(ref c) = self.src.creator {
-            self.sync_creator(session, db, c).await
-        } else {
-            self.sync_all(session, db).await
+            self.sync_post(session, db, p).await?;
         }
+        Ok(())
     }
 }
 

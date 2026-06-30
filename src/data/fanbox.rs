@@ -570,22 +570,30 @@ pub async fn fetch_post(session: &Session, post_id: u64) -> anyhow::Result<Fetch
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct SupportedCreator {
-    #[serde(deserialize_with = "super::de_str_to_u64")]
-    #[expect(unused)]
-    pub id: u64,
+pub struct Creator {
     pub creator_id: String,
     pub user: Option<LinkedPixivUser>,
     #[expect(unused)]
     pub has_adult_content: bool,
+    #[expect(unused)]
+    pub description: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SupportedCreator {
+    #[serde(deserialize_with = "super::de_str_to_u64")]
+    #[expect(unused)]
+    pub id: u64,
+
+    #[serde(flatten)]
+    pub creator: Creator,
 
     // Supporting plan
     #[expect(unused)]
     pub fee: u64,
     #[expect(unused)]
     pub title: String,
-    #[expect(unused)]
-    pub description: String,
 }
 
 pub async fn fetch_supporting_list(session: &Session) -> anyhow::Result<Vec<SupportedCreator>> {
@@ -598,4 +606,24 @@ pub async fn fetch_supporting_list(session: &Session) -> anyhow::Result<Vec<Supp
     })
     .await?;
     json.into_body()
+}
+
+/**
+ * Only return all non-supported followed creators
+ */
+pub async fn fetch_following_list(session: &Session) -> anyhow::Result<Vec<Creator>> {
+    #[derive(Deserialize, Debug)]
+    struct FollowingRespWrapper {
+        creators: Vec<Creator>,
+    }
+
+    let url = "https://api.fanbox.cc/creator.listFollowing";
+    let json: Response<FollowingRespWrapper> = crate::fetch::fetch(|client| {
+        Ok(client
+            .get(url)
+            .prepare_with(FanboxRequest(session))?
+            .build()?)
+    })
+    .await?;
+    json.into_body().map(|resp| resp.creators)
 }

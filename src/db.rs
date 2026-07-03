@@ -6,8 +6,7 @@ use sqlx::{
 };
 
 use crate::data::{
-    fanbox,
-    pixiv::{IllustBookmarkTags, IllustState, UgoiraFrame},
+    fanbox, pixiv::{IllustBookmarkTags, IllustState, UgoiraFrame},
 };
 
 struct TagIterator<I: Iterator<Item = u64> + Clone>(I);
@@ -83,8 +82,32 @@ pub struct DownloadPathEntry<ID> {
 pub struct FanboxPost {
     pub id: i64,
     pub title: String,
+    #[allow(unused)]
     pub creator_id: String,
     pub cover_id: Option<String>, // The cover ID
+}
+
+pub enum FanboxPostBody {
+    SimpleOrLegacy(String),
+    Rich(Vec<fanbox::FetchPostBlock>),
+}
+
+pub struct FanboxPostDetail {
+    pub id: u64,
+    pub title: String,
+    pub creator_id: String,
+
+    pub body: Option<FanboxPostBody>,
+}
+
+pub struct FanboxPostImage {
+    pub id: String,
+    #[allow(unused)]
+    pub width: u64,
+    #[allow(unused)]
+    pub height: u64,
+    #[allow(unused)]
+    pub ext: String,
 }
 
 static MIGRATOR: Migrator = sqlx::migrate!();
@@ -932,5 +955,65 @@ impl Database {
             creator_id: r.get("creator_id"),
             cover_id: r.get("cover_id"),
         }).collect())
+    }
+
+    pub async fn get_fanbox_post(
+        &self,
+        id: u64,
+    ) -> anyhow::Result<Option<FanboxPostDetail>> {
+        let post = sqlx::query!(
+            "SELECT id, title, creator_id, body, is_body_rich FROM fanbox_posts WHERE id = ?",
+            id as i64
+        )
+        .fetch_one(&self.db)
+        .await?;
+
+        let body = if post.is_body_rich == Some(true) {
+            if let Some(b) = post.body {
+                Some(FanboxPostBody::Rich(serde_json::from_str(&b)?))
+            } else {
+                None
+            }
+        } else {
+            post.body.map(|b| FanboxPostBody::SimpleOrLegacy(b))
+        };
+
+        Ok(Some(FanboxPostDetail {
+            id: post.id as u64,
+            title: post.title,
+            creator_id: post.creator_id,
+            body,
+        }))
+    }
+
+    pub async fn list_fanbox_post_images(
+        &self,
+        post_id: u64,
+    ) -> anyhow::Result<Vec<FanboxPostImage>> {
+        let post_id = post_id as i64;
+        let result = sqlx::query!(
+            "SELECT id as \"id!\", width, height, ext, idx FROM fanbox_images WHERE post_id = ? AND idx IS NOT NULL ORDER BY idx ASC",
+            post_id
+        )
+        .fetch_all(&self.db)
+        .await?
+        .into_iter()
+        .map(|row| {
+            FanboxPostImage {
+                id: row.id,
+                width: row.width as u64,
+                height: row.height as u64,
+                ext: row.ext,
+            }
+        })
+        .collect();
+        Ok(result)
+    }
+
+    pub async fn get_fanbox_image(&self, id: &str) -> anyhow::Result<Option<(String, String)>> {
+        Ok(sqlx::query!("SELECT path, ext FROM fanbox_images WHERE id = ?", id)
+            .fetch_optional(&self.db)
+            .await?
+            .and_then(|e| e.path.map(|p| (p, e.ext))))
     }
 }

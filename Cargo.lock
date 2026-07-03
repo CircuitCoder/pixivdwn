@@ -2266,6 +2266,7 @@ dependencies = [
  "hex",
  "image",
  "indicatif",
+ "mime_guess",
  "rand 0.10.1",
  "regex",
  "scraper",

@@ -1,4 +1,7 @@
+use std::path::PathBuf;
+
 use axum::{Router, extract::State, http::Uri, response::{IntoResponse, Response}};
+use bag_fs::fs::FsHandler;
 use bag_lib::path::{Path, SegmentParseError};
 use tower_http::cors::{Any, CorsLayer};
 
@@ -7,6 +10,9 @@ pub mod fanbox;
 #[derive(Clone)]
 pub struct ServeState {
     db: crate::db::Database,
+    #[allow(unused)]
+    fanbox_base: PathBuf,
+    fanbox_fs: FsHandler,
 }
 
 macro_rules! unwrap_resp {
@@ -26,7 +32,7 @@ macro_rules! unwrap_resp {
 }
 
 
-pub fn build(db: crate::db::Database) -> Router {
+pub fn build(session: &crate::config::Session, db: crate::db::Database) -> anyhow::Result<Router> {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
@@ -61,9 +67,15 @@ pub fn build(db: crate::db::Database) -> Router {
         ).into_response()
     });
 
-    Router::new()
+    let fanbox_base = session.fanbox_base_dir.as_ref().ok_or_else(|| anyhow::anyhow!("Fanbox Base dir must be set"))?;
+
+    Ok(Router::new()
         .nest("/v1/raw/fanbox", fanbox::raw())
         .nest("/v1/render", render)
-        .with_state(ServeState { db })
-        .layer(cors)
+        .with_state(ServeState {
+            db,
+            fanbox_base: fanbox_base.clone(),
+            fanbox_fs: FsHandler::new(fanbox_base.clone()),
+        })
+        .layer(cors))
 }

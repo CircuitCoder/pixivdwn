@@ -60,6 +60,10 @@ pub async fn fetch<T: DeserializeOwned>(
     tracing::debug!("Fetching {}", req.uri());
     tracing::debug!("  Headers: {:#?}", req.headers());
     let resp = client.execute(req).await?;
-    let json = resp.json::<T>().await?;
+    tracing::debug!("Headers: {:#?}", resp.headers());
+    let text = resp.text().await?;
+    tracing::debug!("Body: {}", text);
+    let json: T = serde_json::from_str(&text)?;
+    // let json = resp.json::<T>().await?;
     Ok(json)
 }

@@ -39,3 +39,4 @@ bag-lib = { path = "../bag/bag-lib" }
 bag-fs = { path = "../bag/bag-fs" }
 axum = "0.8.9"
 tower-http = { version = "0.5", features = ["cors", "compression-br"] }
+mime_guess = "2.0.5"

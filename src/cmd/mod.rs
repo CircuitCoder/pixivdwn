@@ -46,7 +46,7 @@ impl Command {
             Command::Download(cmd) => cmd.run(session, &db).await,
             Command::Fanbox(cmd) => cmd.run(session, &db).await,
             Command::Query(cmd) => cmd.run(&db).await,
-            Command::Serve(cmd) => cmd.run(db).await,
+            Command::Serve(cmd) => cmd.run(session, db).await,
             Command::Database(_) => unreachable!(),
         }
     }

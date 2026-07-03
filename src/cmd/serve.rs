@@ -11,8 +11,8 @@ pub struct Serve {
 }
 
 impl Serve {
-    pub async fn run(&self, db: crate::db::Database) -> anyhow::Result<()> {
-        let app = crate::serve::build(db);
+    pub async fn run(&self, session: &crate::config::Session, db: crate::db::Database) -> anyhow::Result<()> {
+        let app = crate::serve::build(session, db)?;
         let binder = tokio::net::TcpListener::bind((self.host, self.port)).await?;
         tracing::info!("Listening on {}:{}", self.host, self.port);
         axum::serve(binder, app).await?;

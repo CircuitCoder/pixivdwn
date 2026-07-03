@@ -1,9 +1,9 @@
-use axum::{Json, Router, response::{IntoResponse, Response}};
-use bag_lib::{action::Action, path::Path, ui::{Component, Gallery, GalleryImage, GalleryImageType}};
+use axum::{Json, Router, extract::State, http::HeaderMap, response::{IntoResponse, Response}};
+use bag_lib::{action::Action, path::Path, ui::{Component, Gallery, GalleryImage, GalleryImageType, Image, Text, TextVariant}};
 
 use crate::serve::ServeState;
 
-pub async fn render_creators(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result<Response> {
+async fn render_creators(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result<Response> {
     const DEFAULT_PAGE_SIZE: usize = 100;
     let limit = path
         .last()
@@ -64,7 +64,7 @@ pub async fn render_creators(db: &crate::db::Database, path: Path<'_>) -> anyhow
     Ok(Json(layout).into_response())
 }
 
-pub async fn render_list(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result<Response> {
+async fn render_list(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result<Response> {
     const DEFAULT_PAGE_SIZE: usize = 100;
     let limit = path
         .last()
@@ -130,6 +130,69 @@ pub async fn render_list(db: &crate::db::Database, path: Path<'_>) -> anyhow::Re
     Ok(Json(layout).into_response())
 }
 
+async fn render_post(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result<Response> {
+    let Ok(post_id) = path.last().unwrap().0.parse::<u64>() else {
+        return Ok((
+            axum::http::StatusCode::BAD_REQUEST,
+            format!("Invalid post id: {}", path.last().unwrap().0),
+        ).into_response());
+    };
+
+    let Some(post) = db.get_fanbox_post(post_id).await? else {
+        return Ok((
+            axum::http::StatusCode::NOT_FOUND,
+            format!("Post not found: {}", post_id),
+        ).into_response());
+    };
+
+    // TODO: get siblings
+
+    let main = match post.body {
+        None => vec![Component::Text(Text {content:"Not Fetched".to_string(), variant: TextVariant::Hint })],
+        Some(crate::db::FanboxPostBody::SimpleOrLegacy(content)) => {
+            // TODO: fetch all files
+            let images = db.list_fanbox_post_images(post_id).await?;
+            let mut ret = vec![
+                Component::Text(Text {content, variant: TextVariant::Body }),
+            ];
+            ret.extend(images.into_iter().map(|img| {
+                Component::Image(Image { resource: format!("fanbox/image/{}", img.id) })
+            }));
+            ret
+        },
+        Some(crate::db::FanboxPostBody::Rich(body)) => body.into_iter().map(|e| match e {
+            crate::data::fanbox::FetchPostBlock::Paragraph { text }
+                => Component::Text(Text {content:text, variant: TextVariant::Body }),
+            crate::data::fanbox::FetchPostBlock::Header { text }
+                => Component::Text(Text {content:text, variant: TextVariant::Title }),
+            crate::data::fanbox::FetchPostBlock::File { file_id }
+                => Component::Text(Text {content:format!("File: {}", file_id), variant: TextVariant::Body }),
+            crate::data::fanbox::FetchPostBlock::Image { image_id }
+                => Component::Image(Image { resource: format!("fanbox/image/{}", image_id) }),
+            crate::data::fanbox::FetchPostBlock::Embed { embed_id: _, content }
+                => Component::Text(Text {content:format!("Embed: {}", serde_json::to_string(&content).unwrap()), variant: TextVariant::Hint }),
+            crate::data::fanbox::FetchPostBlock::UrlEmbed { url_embed_id: _, content }
+                => Component::Text(Text {content:format!("URL Embed: {}", serde_json::to_string(&content).unwrap()), variant: TextVariant::Hint }),
+        }).collect()
+    };
+
+    let layout = bag_lib::ui::Layout {
+        top: vec![],
+        main,
+        metadata: vec![
+            Component::Text(Text {content: post.title, variant: TextVariant::Title }),
+            Component::Text(Text {content: "Creator".to_owned(), variant: TextVariant::Hint }),
+            Component::Text(Text {content: post.creator_id, variant: TextVariant::Body }),
+            Component::Text(Text {content: "ID".to_owned(), variant: TextVariant::Hint }),
+            Component::Text(Text {content: post.id.to_string(), variant: TextVariant::Body }),
+        ],
+        left: None,
+        right: None,
+    };
+
+    Ok(Json(layout).into_response())
+}
+
 pub async fn render(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result<Response> {
     // Routing
     if path.0.len() == 1 {
@@ -142,6 +205,10 @@ pub async fn render(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result<
         return render_list(&db, path).await;
     } else if path.0.len() == 3 && path.0[1].0 == "post" {
         // /post/<id>
+        return render_post(&db, path).await;
+    } else if path.0.len() >= 3 && path.0[1].0 == "archive" {
+        // /archive/<id>/:/<subpath...>
+        // Images never have subpaths
         todo!()
     }
 
@@ -151,6 +218,24 @@ pub async fn render(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result<
     ).into_response())
 }
 
+async fn fanbox_image(state: State<ServeState>, axum::extract::Path(id): axum::extract::Path<String>, headers: HeaderMap) -> Response {
+    let path = match state.db.get_fanbox_image(&id).await {
+        Ok(Some((path, _))) => path,
+        Ok(None) => return (
+            axum::http::StatusCode::NOT_FOUND,
+            format!("Image not found: {}", id),
+        ).into_response(),
+        Err(e) => return (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Error fetching image: {}", e),
+        ).into_response(),
+    };
+
+    tracing::info!("Serving fanbox image {} from path {}", id, path.to_string());
+    state.fanbox_fs.handle(&path, &headers).await
+}
+
 pub fn raw() -> Router<ServeState> {
     Router::new()
+        .route("/image/{id}", axum::routing::get(fanbox_image))
 }

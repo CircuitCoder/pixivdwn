@@ -3,7 +3,7 @@ use futures::StreamExt;
 use sqlx::AssertSqlSafe;
 
 use crate::{
-    data::fanbox::FanboxRequest, util::{
+    data::fanbox::{FanboxRequest, FetchPostImage}, util::{
         DatabasePathFormat, DownloadIdSrc, DownloadOverwriteBehavior, DownloadResult,
         TerminationCondition,
     },
@@ -116,11 +116,12 @@ impl FanboxSyncArgs {
             }
 
             for (idx, image) in body.images() {
-                let added = db.add_fanbox_image(detail.post.id, idx, image).await?;
+                let added = db.add_fanbox_image(detail.post.id, Some(idx), image).await?;
                 if added {
                     tracing::info!("  Added {}: image {}", idx, image.id);
                 }
             }
+
         }
 
         Ok(())
@@ -140,6 +141,21 @@ impl FanboxSyncArgs {
 
         while let Some(post) = posts.next().await.transpose()? {
             let orig = db.query_fanbox_post_status(post.id).await?;
+            // Update cover no matter what
+            if let Some(ref cover) = post.cover {
+                let guessed = FetchPostImage::guess_from_cover(&cover.url);
+                if cover.r#type != "cover_image" {
+                    tracing::warn!("Unexpected cover type {} for post {}. Skipping", cover.r#type, post.id);
+                } else if guessed.is_none() {
+                    tracing::warn!("Failed to guess cover image from url {} for post {}. Skipping", cover.url, post.id);
+                } else {
+                    let guessed = guessed.unwrap();
+                    let added = db.add_fanbox_image(post.id, None, &guessed).await?;
+                    if added {
+                        tracing::info!("  Added cover image {}", guessed.id);
+                    }
+                }
+            }
             if let Some(orig) = orig
                 && !orig.needs_update(&post)
             {

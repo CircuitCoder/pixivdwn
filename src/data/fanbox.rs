@@ -20,10 +20,8 @@ pub struct LinkedPixivUser {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct FetchPostCover {
-    #[expect(unused)]
-    r#type: String,
-    #[expect(unused)]
-    url: String,
+    pub r#type: String,
+    pub url: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -47,6 +45,7 @@ pub struct FetchPost {
     #[expect(unused)]
     pub comment_count: usize,
 
+    pub cover: Option<FetchPostCover>,
     pub is_restricted: bool,
 
     #[expect(unused)]
@@ -54,8 +53,6 @@ pub struct FetchPost {
     pub creator_id: String,
     #[expect(unused)]
     pub has_adult_content: bool,
-    #[expect(unused)]
-    pub cover: Option<FetchPostCover>,
     #[expect(unused)]
     pub excerpt: String,
     #[expect(unused)]
@@ -107,6 +104,28 @@ pub struct FetchPostImage {
     pub original_url: String,
     #[expect(unused)]
     pub thumbnail_url: String,
+}
+
+impl FetchPostImage {
+    pub fn guess_from_cover(cover: &str) -> Option<Self> {
+        // Extract /<width>x<height>_ from url
+        // Extract <id>.<ext> from last segment
+        regex::Regex::new(r"/(?P<width>\d+)x(?P<height>\d+)_[^/]+/.*/(?P<id>[^/.]+)\.(?P<ext>[^/.]+)$")
+            .ok()?
+            .captures(cover)
+            .and_then(|caps| Some(Self {
+                id: caps.name("id").unwrap().as_str().to_string(),
+                extension: caps.name("ext").unwrap().as_str().to_string(),
+                width: caps
+                    .name("width")
+                    .and_then(|m| m.as_str().parse::<u64>().ok())?,
+                height: caps
+                    .name("height")
+                    .and_then(|m| m.as_str().parse::<u64>().ok())?,
+                original_url: cover.to_string(),
+                thumbnail_url: cover.to_string(),
+            }))
+    }
 }
 
 #[derive(Deserialize, Debug)]

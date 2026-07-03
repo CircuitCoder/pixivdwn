@@ -629,7 +629,7 @@ impl Database {
     pub async fn add_fanbox_image(
         &self,
         post_id: u64,
-        idx: usize,
+        idx: Option<usize>,
         img: &crate::data::fanbox::FetchPostImage,
     ) -> anyhow::Result<bool> {
         let id = &img.id;
@@ -638,7 +638,7 @@ impl Database {
         let width = img.width as i64;
         let height = img.height as i64;
         let ext = &img.extension;
-        let idx = idx as i64;
+        let idx = idx.map(|e| e as i64);
 
         let ret = sqlx::query!(
             r#"INSERT OR IGNORE INTO fanbox_images (

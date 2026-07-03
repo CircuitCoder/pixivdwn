@@ -32,7 +32,7 @@ thiserror = "2.0.17"
 tokio = { version = "1.47.1", features = ["macros", "rt", "rt-multi-thread", "time"] }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.20"
-wreq = { version = "6.0.0-rc.29", features = ["json", "stream", "query"] }
+wreq = { version = "6.0.0-rc.29", features = ["json", "stream", "query", "gzip"] }
 wreq-util = "3.0.0-rc.3"
 zip = "8.6.0"
 bag-lib = { path = "../bag/bag-lib" }

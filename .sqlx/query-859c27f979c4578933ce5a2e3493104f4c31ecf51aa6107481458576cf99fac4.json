@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT DISTINCT creator_id FROM fanbox_posts WHERE (body IS NOT NULL OR ?) ORDER BY creator_id ASC LIMIT ? OFFSET ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "creator_id",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "fanbox_posts",
+            "name": "creator_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "859c27f979c4578933ce5a2e3493104f4c31ecf51aa6107481458576cf99fac4"
+}

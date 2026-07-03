@@ -1,0 +1,74 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id as \"id!\", width, height, ext, idx FROM fanbox_images WHERE post_id = ? AND idx IS NOT NULL ORDER BY idx ASC",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "fanbox_images",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "width",
+        "ordinal": 1,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "fanbox_images",
+            "name": "width"
+          }
+        }
+      },
+      {
+        "name": "height",
+        "ordinal": 2,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "fanbox_images",
+            "name": "height"
+          }
+        }
+      },
+      {
+        "name": "ext",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "fanbox_images",
+            "name": "ext"
+          }
+        }
+      },
+      {
+        "name": "idx",
+        "ordinal": 4,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "fanbox_images",
+            "name": "idx"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "272b1100a4ba47a719d9e42bd03f5bfcc0e1f377de4830806714a2015e234d32"
+}

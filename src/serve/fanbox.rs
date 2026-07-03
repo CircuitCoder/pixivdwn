@@ -17,8 +17,14 @@ pub async fn render_creators(db: &crate::db::Database, path: Path<'_>) -> anyhow
         .arg("offset")
         .and_then(|s| s.parse::<usize>().ok())
         .unwrap_or(0) as i64;
+    let all = path
+        .last()
+        .unwrap()
+        .arg("all")
+        .and_then(|s| s.parse::<bool>().ok())
+        .unwrap_or(false);
 
-    let mut creators = db.list_fanbox_creators(limit + 1, offset).await?;
+    let mut creators = db.list_fanbox_creators(limit + 1, offset, all).await?;
     let is_start = offset == 0;
     let is_end = creators.len() as i64 <= limit;
     if !is_end {

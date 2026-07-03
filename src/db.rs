@@ -885,10 +885,10 @@ impl Database {
         Ok(rows_updated > 0)
     }
 
-    pub async fn list_fanbox_creators(&self, limit: i64, offset: i64) -> anyhow::Result<Vec<String>> {
+    pub async fn list_fanbox_creators(&self, limit: i64, offset: i64, all: bool) -> anyhow::Result<Vec<String>> {
         let recs = sqlx::query!(
-            "SELECT DISTINCT creator_id FROM fanbox_posts ORDER BY creator_id ASC LIMIT ? OFFSET ?",
-            limit, offset
+            "SELECT DISTINCT creator_id FROM fanbox_posts WHERE (body IS NOT NULL OR ?) ORDER BY creator_id ASC LIMIT ? OFFSET ?",
+            all, limit, offset
         )
             .fetch_all(&self.db)
             .await?

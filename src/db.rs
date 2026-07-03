@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 use sqlx::{
-    SqlSafeStr, SqlitePool, migrate::{Migrate, Migrator}, sqlite::{SqliteConnectOptions, SqliteRow},
+    QueryBuilder, SqlSafeStr, SqlitePool, migrate::{Migrate, Migrator}, sqlite::{SqliteConnectOptions, SqliteRow},
 };
 
 use crate::data::{
@@ -72,7 +72,7 @@ pub struct FanboxImageDownloadSpec {
     pub url: String,
     pub post_id: i64,
     pub ext: String,
-    pub idx: i64,
+    pub idx: Option<i64>,
 }
 
 pub struct DownloadPathEntry<ID> {
@@ -81,6 +81,8 @@ pub struct DownloadPathEntry<ID> {
 }
 
 static MIGRATOR: Migrator = sqlx::migrate!();
+
+#[derive(Clone)]
 pub struct Database {
     db: SqlitePool,
 }
@@ -832,13 +834,13 @@ impl Database {
 
     pub async fn query_fanbox_image_paths(
         &self,
-    ) -> anyhow::Result<Vec<DownloadPathEntry<(String, u64, u64)>>> {
+    ) -> anyhow::Result<Vec<DownloadPathEntry<(String, u64, Option<u64>)>>> {
         let recs = sqlx::query!("SELECT id as \"id!\", post_id, idx, path FROM fanbox_images")
             .fetch_all(&self.db)
             .await?
             .into_iter()
             .map(|r| DownloadPathEntry {
-                id: (r.id, r.post_id as u64, r.idx as u64),
+                id: (r.id, r.post_id as u64, r.idx.map(|e| e as u64)),
                 path: r.path,
             })
             .collect();
@@ -874,5 +876,44 @@ impl Database {
             .await?
             .rows_affected();
         Ok(rows_updated > 0)
+    }
+
+    pub async fn list_fanbox_creators(&self, limit: i64, offset: i64) -> anyhow::Result<Vec<String>> {
+        let recs = sqlx::query!(
+            "SELECT DISTINCT creator_id FROM fanbox_posts ORDER BY creator_id ASC LIMIT ? OFFSET ?",
+            limit, offset
+        )
+            .fetch_all(&self.db)
+            .await?
+            .into_iter()
+            .map(|r| r.creator_id)
+            .collect();
+        Ok(recs)
+    }
+
+    pub async fn list_fanbox_posts(&self, limit: i64, offset: i64, all: bool, creator: Option<&str>) -> anyhow::Result<Vec<String>> {
+        let mut query = QueryBuilder::new("SELECT id FROM fanbox_posts");
+        if !all {
+            query.push(" WHERE body IS NOT NULL");
+        }
+
+        if let Some(creator) = creator {
+            if !all {
+                query.push(" AND");
+            } else {
+                query.push(" WHERE");
+            }
+            query.push(" creator_id = ");
+            query.push_bind(creator);
+        }
+
+        query.push(" ORDER BY published_datetime DESC LIMIT ");
+        query.push_bind(limit);
+        query.push(" OFFSET ");
+        query.push_bind(offset);
+
+        let result = query.build().fetch_all(&self.db).await?;
+
+        todo!()
     }
 }

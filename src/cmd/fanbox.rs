@@ -479,7 +479,11 @@ pub async fn get_download_spec(
                 .query_fanbox_image_download_spec(id)
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("Image {} not found in database", id))?;
-            let filename = format!("{}_{}_{}.{}", spec.post_id, spec.idx, id, spec.ext);
+            let filename = if let Some(idx) = spec.idx {
+                format!("{}_{}_{}.{}", spec.post_id, idx, id, spec.ext)
+            } else {
+                format!("{}_cover_{}.{}", spec.post_id, id, spec.ext)
+            };
             Ok((spec.url, filename))
         }
     }

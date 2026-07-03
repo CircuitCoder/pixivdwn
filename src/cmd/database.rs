@@ -132,7 +132,7 @@ impl FileFsckArgs {
                         "Missing fanbox image {} ({}_{}_{})",
                         p,
                         ent.id.1,
-                        ent.id.2,
+                        ent.id.2.map(|e| e.to_string()).unwrap_or_else(|| "cover".to_string()),
                         ent.id.0
                     );
                 }

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 use sqlx::{
-    QueryBuilder, SqlSafeStr, SqlitePool, migrate::{Migrate, Migrator}, sqlite::{SqliteConnectOptions, SqliteRow},
+    QueryBuilder, Row, SqlSafeStr, SqlitePool, migrate::{Migrate, Migrator}, sqlite::{SqliteConnectOptions, SqliteRow},
 };
 
 use crate::data::{
@@ -78,6 +78,13 @@ pub struct FanboxImageDownloadSpec {
 pub struct DownloadPathEntry<ID> {
     pub id: ID,
     pub path: Option<String>,
+}
+
+pub struct FanboxPost {
+    pub id: i64,
+    pub title: String,
+    pub creator_id: String,
+    pub cover_id: Option<String>, // The cover ID
 }
 
 static MIGRATOR: Migrator = sqlx::migrate!();
@@ -891,8 +898,13 @@ impl Database {
         Ok(recs)
     }
 
-    pub async fn list_fanbox_posts(&self, limit: i64, offset: i64, all: bool, creator: Option<&str>) -> anyhow::Result<Vec<String>> {
-        let mut query = QueryBuilder::new("SELECT id FROM fanbox_posts");
+    pub async fn list_fanbox_posts(&self, limit: i64, offset: i64, all: bool, creator: Option<&str>) -> anyhow::Result<Vec<FanboxPost>> {
+        let mut query = QueryBuilder::new(r#"
+            SELECT fanbox_posts.id as id, title, creator_id, fanbox_images.id as cover_id
+            FROM fanbox_posts
+            LEFT JOIN fanbox_images ON fanbox_posts.id = fanbox_images.post_id AND fanbox_images.idx IS NULL
+        "#);
+
         if !all {
             query.push(" WHERE body IS NOT NULL");
         }
@@ -914,6 +926,11 @@ impl Database {
 
         let result = query.build().fetch_all(&self.db).await?;
 
-        todo!()
+        Ok(result.into_iter().map(|r| FanboxPost {
+            id: r.get("id"),
+            title: r.get("title"),
+            creator_id: r.get("creator_id"),
+            cover_id: r.get("cover_id"),
+        }).collect())
     }
 }

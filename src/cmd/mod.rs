@@ -4,6 +4,7 @@ pub mod download;
 pub mod fanbox;
 pub mod illust;
 pub mod query;
+pub mod serve;
 
 use clap::Subcommand;
 
@@ -24,6 +25,9 @@ pub enum Command {
     /// Query local database
     Query(query::Query),
 
+    /// Serve with web server
+    Serve(serve::Serve),
+
     /// Database management
     Database(database::Database),
 }
@@ -42,6 +46,7 @@ impl Command {
             Command::Download(cmd) => cmd.run(session, &db).await,
             Command::Fanbox(cmd) => cmd.run(session, &db).await,
             Command::Query(cmd) => cmd.run(&db).await,
+            Command::Serve(cmd) => cmd.run(db).await,
             Command::Database(_) => unreachable!(),
         }
     }

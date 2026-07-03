@@ -4,6 +4,7 @@ mod data;
 mod db;
 mod fetch;
 mod util;
+mod serve;
 
 use std::path::PathBuf;
 

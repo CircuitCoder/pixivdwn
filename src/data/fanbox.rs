@@ -483,6 +483,9 @@ pub struct FetchPostDetail {
     #[serde(flatten)]
     pub post: FetchPost,
 
+    #[serde(rename = "camelCase")]
+    pub cover_image_url: Option<String>,
+
     pub body: Option<FetchPostBody>,
 }
 

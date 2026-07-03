@@ -1,9 +1,9 @@
-use axum::{Json, Router, response::IntoResponse};
-use bag_lib::{action::Action, path::{Path, SegmentParseError}, ui::{Component, Gallery, GalleryImage, GalleryImageType}};
+use axum::{Json, Router, response::{IntoResponse, Response}};
+use bag_lib::{action::Action, path::Path, ui::{Component, Gallery, GalleryImage, GalleryImageType}};
 
 use crate::serve::ServeState;
 
-pub async fn render_creators(db: &crate::db::Database, path: &Path<'_>) -> anyhow::Result<impl IntoResponse> {
+pub async fn render_creators(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result<Response> {
     const DEFAULT_PAGE_SIZE: usize = 100;
     let limit = path
         .last()
@@ -55,10 +55,10 @@ pub async fn render_creators(db: &crate::db::Database, path: &Path<'_>) -> anyho
         }),
     };
 
-    Ok(Json(layout))
+    Ok(Json(layout).into_response())
 }
 
-pub async fn render_list(db: &crate::db::Database, path: &Path<'_>) -> anyhow::Result<impl IntoResponse> {
+pub async fn render_list(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result<Response> {
     const DEFAULT_PAGE_SIZE: usize = 100;
     let limit = path
         .last()
@@ -121,67 +121,28 @@ pub async fn render_list(db: &crate::db::Database, path: &Path<'_>) -> anyhow::R
         }),
     };
 
-    Ok(Json(layout))
+    Ok(Json(layout).into_response())
 }
 
-pub fn render() -> Router<ServeState> {
-    Router::new().fallback(async move |state: axum::extract::State<ServeState>, uri: axum::http::Uri| {
-        let path = uri.path().trim_start_matches('/').trim_end_matches('/');
-        tracing::info!("Render request: {}", path);
-        let parsed = match Path::try_from(path) {
-            Ok(p) => p,
-            Err(SegmentParseError::InvalidArgument(arg)) => {
-                return (
-                    axum::http::StatusCode::BAD_REQUEST,
-                    format!("Invalid argument: {}", arg),
-                )
-                    .into_response();
-            }
-            Err(SegmentParseError::DecodeError(value)) => {
-                return (
-                    axum::http::StatusCode::BAD_REQUEST,
-                    format!("Decode error: {}", value),
-                )
-                    .into_response();
-            }
-        };
+pub async fn render(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result<Response> {
+    // Routing
+    if path.0.len() == 1 {
+        // /fanbox
+        // Fanbox author list
+        return render_creators(&db, path).await;
+    } else if path.0.len() == 2 && path.0[1].0 == "list" {
+        // /fanbox/list,by=<creator_id>,all=<true|false>
+        // Fanbox post list
+        return render_list(&db, path).await;
+    } else if path.0.len() == 3 && path.0[1].0 == "post" {
+        // /post/<id>
+        todo!()
+    }
 
-        macro_rules! unwrap_resp {
-            ($expr:expr) => {
-                match $expr {
-                    Ok(v) => v.into_response(),
-                    Err(e) => {
-                        tracing::error!("Error: {:?}", e);
-                        return (
-                            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                            format!("Internal server error: {:?}", e),
-                        )
-                            .into_response();
-                    }
-                }
-            }
-        }
-
-        // Routing
-        if parsed.0.len() == 1 && parsed.0[0].0 == "creators" {
-            // /fanbox/creators
-            // Fanbox author list
-            return unwrap_resp!(render_creators(&state.db, &parsed).await);
-        } else if parsed.0.len() == 1 && parsed.0[0].0 == "list" {
-            // /fanbox/list,by=<creator_id>,all=<true|false>
-            // Fanbox post list
-            return unwrap_resp!(render_list(&state.db, &parsed).await);
-        } else if parsed.0.len() == 2 && parsed.0[0].0 == "post" {
-            // /post/<id>
-            todo!()
-        }
-
-        return (
-            axum::http::StatusCode::NOT_FOUND,
-            format!("Not found: {}", path),
-        )
-            .into_response();
-    })
+    Ok((
+        axum::http::StatusCode::NOT_FOUND,
+        format!("Not found: {}", path.to_string()),
+    ).into_response())
 }
 
 pub fn raw() -> Router<ServeState> {

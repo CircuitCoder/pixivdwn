@@ -107,6 +107,10 @@ impl FanboxSyncArgs {
 
         tracing::info!("{} post {} - {}", prompt, id, detail.post.title);
 
+        if let Some(ref cover) = detail.cover_image_url {
+            Self::update_post_cover(db, id, cover).await?
+        }
+
         if let Some(ref mut body) = detail.body {
             for (idx, file) in body.files() {
                 let added = db.add_fanbox_file(detail.post.id, idx, file).await?;
@@ -127,6 +131,23 @@ impl FanboxSyncArgs {
         Ok(())
     }
 
+    async fn update_post_cover(
+        db: &crate::db::Database,
+        id: u64,
+        cover: &str,
+    ) -> anyhow::Result<()> {
+        if let Some(guessed) = FetchPostImage::guess_from_cover(&cover) {
+            let added = db.add_fanbox_image(id, None, &guessed).await?;
+            if added {
+                tracing::info!("  Added cover image {}", guessed.id);
+            }
+        } else {
+            tracing::warn!("Failed to guess cover image from url {} for post {}. Skipping", cover, id);
+        }
+
+        Ok(())
+    }
+
     async fn sync_creator(
         &self,
         session: &crate::config::Session,
@@ -141,21 +162,6 @@ impl FanboxSyncArgs {
 
         while let Some(post) = posts.next().await.transpose()? {
             let orig = db.query_fanbox_post_status(post.id).await?;
-            // Update cover no matter what
-            if let Some(ref cover) = post.cover {
-                let guessed = FetchPostImage::guess_from_cover(&cover.url);
-                if cover.r#type != "cover_image" {
-                    tracing::warn!("Unexpected cover type {} for post {}. Skipping", cover.r#type, post.id);
-                } else if guessed.is_none() {
-                    tracing::warn!("Failed to guess cover image from url {} for post {}. Skipping", cover.url, post.id);
-                } else {
-                    let guessed = guessed.unwrap();
-                    let added = db.add_fanbox_image(post.id, None, &guessed).await?;
-                    if added {
-                        tracing::info!("  Added cover image {}", guessed.id);
-                    }
-                }
-            }
             if let Some(orig) = orig
                 && !orig.needs_update(&post)
             {
@@ -164,6 +170,15 @@ impl FanboxSyncArgs {
                     post.id,
                     orig.updated_datetime
                 );
+
+                // Orig exists, so no FK violation. Update cover with URL in lists
+                if let Some(ref cover) = post.cover {
+                    if cover.r#type != "cover_image" {
+                        tracing::warn!("Unexpected cover type {} for post {}. Skipping", cover.r#type, post.id);
+                    } else {
+                        Self::update_post_cover(db, post.id, &cover.url).await?;
+                    }
+                }
 
                 if matches!(self.termination, TerminationCondition::OnHit) {
                     tracing::info!("Encountered an already existing post. Terminating.");

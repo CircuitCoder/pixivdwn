@@ -158,7 +158,7 @@ async fn render_post(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result
         let mime = mime_guess::from_ext(&ext).first_or_octet_stream();
         if mime.type_().as_str() == "video" || mime.type_().as_str() == "image" {
             return Ok(vec![
-                Component::Image(Image { resource: format!("fanbox/file/{}", id) })
+                Component::Image(Image { resource: format!("fanbox/file/{}", id), mime: Some(mime.to_string()) })
             ]);
         }
 
@@ -182,9 +182,10 @@ async fn render_post(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result
         let mut ret = vec![
             Component::Text(Text {content:format!("File {} contains {} files", id, files.len()), variant: TextVariant::Hint })
         ];
+        // FIXME: actually renders the file recursively
         for file in files {
             ret.push(Component::Text(Text {content:format!("File: {}", file), variant: TextVariant::Hint }));
-            ret.push(Component::Image(Image { resource: format!("fanbox/file/{}?subpath={file}", id) }));
+            ret.push(Component::Image(Image { resource: format!("fanbox/file/{}?subpath={file}", id), mime: None }));
         }
         Ok(ret)
     }
@@ -199,7 +200,7 @@ async fn render_post(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result
                 Component::Text(Text {content, variant: TextVariant::Body }),
             ];
             ret.extend(images.into_iter().map(|img| {
-                Component::Image(Image { resource: format!("fanbox/image/{}", img.id) })
+                Component::Image(Image { resource: format!("fanbox/image/{}", img.id), mime: None })
             }));
             for file in files {
                 ret.extend(render_file(db, &file.id).await?);
@@ -216,7 +217,7 @@ async fn render_post(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result
             crate::data::fanbox::FetchPostBlock::File { file_id }
                 => render_file(db, &file_id).await.unwrap_or(vec![Component::Text(Text {content:format!("File not found: {}", file_id), variant: TextVariant::Hint })]),
             crate::data::fanbox::FetchPostBlock::Image { image_id }
-                => vec![Component::Image(Image { resource: format!("fanbox/image/{}", image_id) })],
+                => vec![Component::Image(Image { resource: format!("fanbox/image/{}", image_id), mime: None })],
             crate::data::fanbox::FetchPostBlock::Embed { embed_id: _, content }
                 => vec![Component::Text(Text {content:format!("Embed: {}", serde_json::to_string(&content).unwrap()), variant: TextVariant::Hint })],
             crate::data::fanbox::FetchPostBlock::UrlEmbed { url_embed_id: _, content }

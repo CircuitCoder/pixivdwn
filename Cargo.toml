@@ -40,3 +40,5 @@ bag-fs = { path = "../bag/bag-fs" }
 axum = "0.8.9"
 tower-http = { version = "0.5", features = ["cors", "compression-br"] }
 mime_guess = "2.0.5"
+alphanumeric-sort = "1.5.8"
+urlencoding = "2.1.3"

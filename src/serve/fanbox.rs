@@ -182,8 +182,17 @@ async fn render_post(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result
         }
 
         let files = tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<String>> {
-            let zip = zip::ZipArchive::new(std::fs::File::open(&file)?)?;
-            Ok(zip.file_names().map(|s| s.to_string()).collect::<Vec<_>>())
+            let mut zip = zip::ZipArchive::new(std::fs::File::open(&file)?)?;
+            let mut files = Vec::new();
+            for i in 0..zip.len() {
+                let file = zip.by_index(i)?;
+                if file.is_dir() {
+                    continue;
+                }
+                files.push(file.name().to_string());
+            }
+            alphanumeric_sort::sort_str_slice(&mut files);
+            Ok(files)
         }).await??;
 
         let mut ret = vec![
@@ -191,8 +200,9 @@ async fn render_post(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result
         ];
         // FIXME: actually renders the file recursively
         for file in files {
+            let encoded = urlencoding::encode(&file);
             ret.push(Component::Text(Text {content:format!("File: {}", file), variant: TextVariant::Hint }));
-            ret.push(Component::Image(Image { resource: format!("fanbox/file/{}?subpath={file}", id), mime: None }));
+            ret.push(Component::Image(Image { resource: format!("fanbox/file/{}?subpath={encoded}", id), mime: None }));
         }
         Ok(ret)
     }

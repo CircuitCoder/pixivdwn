@@ -74,6 +74,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
+name = "alphanumeric-sort"
+version = "1.5.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a97de3ad85c4425a2c267a5e91adbe49f9f14e650bd9c78e96b6bc00e5f6673a"
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2291,6 +2297,7 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 name = "pixivdwn"
 version = "0.2.0-alpha1"
 dependencies = [
+ "alphanumeric-sort",
  "anyhow",
  "async-stream",
  "axum",
@@ -2319,6 +2326,7 @@ dependencies = [
  "tower-http 0.5.2",
  "tracing",
  "tracing-subscriber",
+ "urlencoding",
  "wreq",
  "wreq-util",
  "zip",

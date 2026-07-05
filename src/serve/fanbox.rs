@@ -1,5 +1,6 @@
 use axum::{Json, Router, extract::State, http::HeaderMap, response::{IntoResponse, Response}};
 use bag_lib::{action::Action, path::Path, ui::{Component, Gallery, GalleryImage, GalleryImageType, Image, Text, TextVariant}};
+use serde::Deserialize;
 
 use crate::serve::ServeState;
 
@@ -147,33 +148,73 @@ async fn render_post(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result
 
     // TODO: get siblings
 
+    async fn render_file(db: &crate::db::Database, id: &str) -> anyhow::Result<Vec<Component>> {
+        let Some((file, ext)) = db.get_fanbox_file(id).await? else {
+            return Ok(vec![
+                Component::Text(Text {content:format!("File not found: {}", id), variant: TextVariant::Hint })
+            ]);
+        };
+
+        if ext != "zip" {
+            return Ok(vec![
+                Component::Text(Text {content:format!("File not supported: {}.{}", id, ext), variant: TextVariant::Hint })
+            ]);
+        }
+
+        if !std::path::Path::new(&file).is_absolute() {
+            return Ok(vec![
+                Component::Text(Text {content:format!("File path is not absolute: {}", file), variant: TextVariant::Hint })
+            ]);
+        }
+
+        let files = tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<String>> {
+            let zip = zip::ZipArchive::new(std::fs::File::open(&file)?)?;
+            Ok(zip.file_names().map(|s| s.to_string()).collect::<Vec<_>>())
+        }).await??;
+
+        let mut ret = vec![
+            Component::Text(Text {content:format!("File {} contains {} files", id, files.len()), variant: TextVariant::Hint })
+        ];
+        for file in files {
+            ret.push(Component::Text(Text {content:format!("File: {}", file), variant: TextVariant::Hint }));
+            ret.push(Component::Image(Image { resource: format!("fanbox/file/{}?subpath={file}", id) }));
+        }
+        Ok(ret)
+    }
+
     let main = match post.body {
         None => vec![Component::Text(Text {content:"Not Fetched".to_string(), variant: TextVariant::Hint })],
         Some(crate::db::FanboxPostBody::SimpleOrLegacy(content)) => {
             // TODO: fetch all files
             let images = db.list_fanbox_post_images(post_id).await?;
+            let files = db.list_fanbox_post_files(post_id).await?;
             let mut ret = vec![
                 Component::Text(Text {content, variant: TextVariant::Body }),
             ];
             ret.extend(images.into_iter().map(|img| {
                 Component::Image(Image { resource: format!("fanbox/image/{}", img.id) })
             }));
+            for file in files {
+                ret.extend(render_file(db, &file.id).await?);
+            }
             ret
         },
-        Some(crate::db::FanboxPostBody::Rich(body)) => body.into_iter().map(|e| match e {
+        // TODO: change back to single component
+        // Add box for files
+        Some(crate::db::FanboxPostBody::Rich(body)) => futures::future::join_all(body.into_iter().map(async |e| match e {
             crate::data::fanbox::FetchPostBlock::Paragraph { text }
-                => Component::Text(Text {content:text, variant: TextVariant::Body }),
+                => vec![Component::Text(Text {content:text, variant: TextVariant::Body })],
             crate::data::fanbox::FetchPostBlock::Header { text }
-                => Component::Text(Text {content:text, variant: TextVariant::Title }),
+                => vec![Component::Text(Text {content:text, variant: TextVariant::Title })],
             crate::data::fanbox::FetchPostBlock::File { file_id }
-                => Component::Text(Text {content:format!("File: {}", file_id), variant: TextVariant::Body }),
+                => render_file(db, &file_id).await.unwrap_or(vec![Component::Text(Text {content:format!("File not found: {}", file_id), variant: TextVariant::Hint })]),
             crate::data::fanbox::FetchPostBlock::Image { image_id }
-                => Component::Image(Image { resource: format!("fanbox/image/{}", image_id) }),
+                => vec![Component::Image(Image { resource: format!("fanbox/image/{}", image_id) })],
             crate::data::fanbox::FetchPostBlock::Embed { embed_id: _, content }
-                => Component::Text(Text {content:format!("Embed: {}", serde_json::to_string(&content).unwrap()), variant: TextVariant::Hint }),
+                => vec![Component::Text(Text {content:format!("Embed: {}", serde_json::to_string(&content).unwrap()), variant: TextVariant::Hint })],
             crate::data::fanbox::FetchPostBlock::UrlEmbed { url_embed_id: _, content }
-                => Component::Text(Text {content:format!("URL Embed: {}", serde_json::to_string(&content).unwrap()), variant: TextVariant::Hint }),
-        }).collect()
+                => vec![Component::Text(Text {content:format!("URL Embed: {}", serde_json::to_string(&content).unwrap()), variant: TextVariant::Hint })],
+        })).await.into_iter().flatten().collect()
     };
 
     let layout = bag_lib::ui::Layout {
@@ -235,7 +276,40 @@ async fn fanbox_image(state: State<ServeState>, axum::extract::Path(id): axum::e
     state.fanbox_fs.handle(&path, &headers).await
 }
 
+#[derive(Deserialize)]
+struct FileQuery {
+    subpath: Option<String>,
+}
+
+async fn fanbox_file(
+    state: State<ServeState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    axum::extract::Query(query): axum::extract::Query<FileQuery>,
+    headers: HeaderMap
+) -> Response {
+    let path = match state.db.get_fanbox_file(&id).await {
+        Ok(Some((path, _))) => path,
+        Ok(None) => return (
+            axum::http::StatusCode::NOT_FOUND,
+            format!("File not found: {}", id),
+        ).into_response(),
+        Err(e) => return (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Error fetching image: {}", e),
+        ).into_response(),
+    };
+
+    let joined = if let Some(subpath) = query.subpath {
+        path.to_owned() + "/:/" + &subpath
+    } else {
+        path.to_owned()
+    };
+    tracing::info!("Serving fanbox image {} from path {}", id, joined);
+    state.fanbox_fs.handle(&joined, &headers).await
+}
+
 pub fn raw() -> Router<ServeState> {
     Router::new()
         .route("/image/{id}", axum::routing::get(fanbox_image))
+        .route("/file/{id}", axum::routing::get(fanbox_file))
 }

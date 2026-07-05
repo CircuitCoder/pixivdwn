@@ -110,6 +110,18 @@ pub struct FanboxPostImage {
     pub ext: String,
 }
 
+pub struct FanboxPostFile {
+    pub id: String,
+    #[allow(unused)]
+    pub name: String,
+    #[allow(unused)]
+    pub size: i64,
+    #[allow(unused)]
+    pub ext: String,
+    #[allow(unused)]
+    pub idx: i64,
+}
+
 static MIGRATOR: Migrator = sqlx::migrate!();
 
 #[derive(Clone)]
@@ -1012,6 +1024,28 @@ impl Database {
 
     pub async fn get_fanbox_image(&self, id: &str) -> anyhow::Result<Option<(String, String)>> {
         Ok(sqlx::query!("SELECT path, ext FROM fanbox_images WHERE id = ?", id)
+            .fetch_optional(&self.db)
+            .await?
+            .and_then(|e| e.path.map(|p| (p, e.ext))))
+    }
+
+    pub async fn list_fanbox_post_files(
+        &self,
+        post_id: u64,
+    ) -> anyhow::Result<Vec<FanboxPostFile>> {
+        let post_id = post_id as i64;
+        let result = sqlx::query_as!(
+            FanboxPostFile,
+            "SELECT id as \"id!\", name, size, ext, idx FROM fanbox_files WHERE post_id = ? AND idx IS NOT NULL ORDER BY idx ASC",
+            post_id
+        )
+        .fetch_all(&self.db)
+        .await?;
+        Ok(result)
+    }
+
+    pub async fn get_fanbox_file(&self, id: &str) -> anyhow::Result<Option<(String, String)>> {
+        Ok(sqlx::query!("SELECT path, ext FROM fanbox_files WHERE id = ?", id)
             .fetch_optional(&self.db)
             .await?
             .and_then(|e| e.path.map(|p| (p, e.ext))))

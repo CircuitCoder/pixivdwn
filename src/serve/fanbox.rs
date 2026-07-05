@@ -38,7 +38,7 @@ async fn render_creators(db: &crate::db::Database, path: Path<'_>) -> anyhow::Re
             thumbnail: None, // TODO: avatar
             name: creator.clone(),
             action: Some(Action::Navigate {
-                to: format!("fanbox/list,creator={}", creator)
+                to: format!("fanbox/posts,creator={}", creator)
             }),
         }).collect()
     });
@@ -103,7 +103,7 @@ async fn render_list(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result
             thumbnail: post.cover_id.map(|id| format!("fanbox/image/{}", id)),
             name: post.title.clone(),
             action: Some(Action::Navigate {
-                to: format!("fanbox/post/{}", post.id)
+                to: format!("{}/{}", path.to_string(), post.id)
             }),
         }).collect()
     });
@@ -146,7 +146,14 @@ async fn render_post(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result
         ).into_response());
     };
 
-    // TODO: get siblings
+    let list_segment = &path.0[1];
+    let all = list_segment
+        .arg("all")
+        .and_then(|s| s.parse::<bool>().ok())
+        .unwrap_or(false);
+    let creator = list_segment.arg("creator");
+    let (prev, next) = db.get_fanbox_post_siblings(&post, all, creator).await?;
+    let parent_path = path.parent().unwrap().to_string();
 
     async fn render_file(db: &crate::db::Database, id: &str) -> anyhow::Result<Vec<Component>> {
         let Some((file, ext)) = db.get_fanbox_file(id).await? else {
@@ -240,8 +247,8 @@ async fn render_post(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result
             Component::Text(Text {content: "Updated".to_owned(), variant: TextVariant::Hint }),
             Component::Text(Text {content: post.updated_datetime.to_rfc3339(), variant: TextVariant::Body }),
         ],
-        left: None,
-        right: None,
+        left: prev.map(|id| format!("{}/{}", parent_path, id)),
+        right: next.map(|id| format!("{}/{}", parent_path, id)),
     };
 
     Ok(Json(layout).into_response())
@@ -253,12 +260,12 @@ pub async fn render(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result<
         // /fanbox
         // Fanbox author list
         return render_creators(&db, path).await;
-    } else if path.0.len() == 2 && path.0[1].0 == "list" {
-        // /fanbox/list,by=<creator_id>,all=<true|false>
+    } else if path.0.len() == 2 && path.0[1].0 == "posts" {
+        // /fanbox/posts,creator=<creator_id>,all=<true|false>
         // Fanbox post list
         return render_list(&db, path).await;
-    } else if path.0.len() == 3 && path.0[1].0 == "post" {
-        // /post/<id>
+    } else if path.0.len() == 3 && path.0[1].0 == "posts" {
+        // /fanbox/posts,creator=<creator_id>,all=<true|false>/<id>
         return render_post(&db, path).await;
     } else if path.0.len() >= 3 && path.0[1].0 == "archive" {
         // /archive/<id>/:/<subpath...>

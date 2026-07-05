@@ -957,7 +957,7 @@ impl Database {
             query.push_bind(creator);
         }
 
-        query.push(" ORDER BY published_datetime DESC LIMIT ");
+        query.push(" ORDER BY published_datetime DESC, CAST(fanbox_posts.id AS INTEGER) DESC LIMIT ");
         query.push_bind(limit);
         query.push(" OFFSET ");
         query.push_bind(offset);
@@ -972,6 +972,91 @@ impl Database {
         }).collect())
     }
 
+    pub async fn get_fanbox_post_siblings(
+        &self,
+        post: &FanboxPostDetail,
+        all: bool,
+        creator: Option<&str>,
+    ) -> anyhow::Result<(Option<i64>, Option<i64>)> {
+        let mut prev_query = QueryBuilder::new(r#"
+            SELECT CAST(id AS INTEGER) AS id
+            FROM fanbox_posts
+        "#);
+
+        if !all {
+            prev_query.push(" WHERE body IS NOT NULL");
+        }
+
+        if let Some(creator) = creator {
+            if !all {
+                prev_query.push(" AND");
+            } else {
+                prev_query.push(" WHERE");
+            }
+            prev_query.push(" creator_id = ");
+            prev_query.push_bind(creator);
+        }
+
+        if !all || creator.is_some() {
+            prev_query.push(" AND");
+        } else {
+            prev_query.push(" WHERE");
+        }
+        prev_query.push(" (published_datetime > datetime(");
+        prev_query.push_bind(post.published_datetime);
+        prev_query.push(") OR (published_datetime = datetime(");
+        prev_query.push_bind(post.published_datetime);
+        prev_query.push(") AND CAST(id AS INTEGER) > ");
+        prev_query.push_bind(post.id as i64);
+        prev_query.push(")) ORDER BY published_datetime ASC, CAST(id AS INTEGER) ASC LIMIT 1");
+
+        let prev = prev_query
+            .build()
+            .fetch_optional(&self.db)
+            .await?
+            .map(|row| row.get("id"));
+
+        let mut next_query = QueryBuilder::new(r#"
+            SELECT CAST(id AS INTEGER) AS id
+            FROM fanbox_posts
+        "#);
+
+        if !all {
+            next_query.push(" WHERE body IS NOT NULL");
+        }
+
+        if let Some(creator) = creator {
+            if !all {
+                next_query.push(" AND");
+            } else {
+                next_query.push(" WHERE");
+            }
+            next_query.push(" creator_id = ");
+            next_query.push_bind(creator);
+        }
+
+        if !all || creator.is_some() {
+            next_query.push(" AND");
+        } else {
+            next_query.push(" WHERE");
+        }
+        next_query.push(" (published_datetime < datetime(");
+        next_query.push_bind(post.published_datetime);
+        next_query.push(") OR (published_datetime = datetime(");
+        next_query.push_bind(post.published_datetime);
+        next_query.push(") AND CAST(id AS INTEGER) < ");
+        next_query.push_bind(post.id as i64);
+        next_query.push(")) ORDER BY published_datetime DESC, CAST(id AS INTEGER) DESC LIMIT 1");
+
+        let next = next_query
+            .build()
+            .fetch_optional(&self.db)
+            .await?
+            .map(|row| row.get("id"));
+
+        Ok((prev, next))
+    }
+
     pub async fn get_fanbox_post(
         &self,
         id: u64,
@@ -980,8 +1065,12 @@ impl Database {
             "SELECT id, title, creator_id, body, is_body_rich, published_datetime as 'published_datetime: chrono::DateTime<chrono::Utc>', updated_datetime as 'updated_datetime: chrono::DateTime<chrono::Utc>' FROM fanbox_posts WHERE id = ?",
             id as i64
         )
-        .fetch_one(&self.db)
+        .fetch_optional(&self.db)
         .await?;
+
+        let Some(post) = post else {
+            return Ok(None);
+        };
 
         let body = if post.is_body_rich == Some(true) {
             if let Some(b) = post.body {

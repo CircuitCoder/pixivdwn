@@ -155,6 +155,13 @@ async fn render_post(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result
             ]);
         };
 
+        let mime = mime_guess::from_ext(&ext).first_or_octet_stream();
+        if mime.type_().as_str() == "video" || mime.type_().as_str() == "image" {
+            return Ok(vec![
+                Component::Image(Image { resource: format!("fanbox/file/{}", id) })
+            ]);
+        }
+
         if ext != "zip" {
             return Ok(vec![
                 Component::Text(Text {content:format!("File not supported: {}.{}", id, ext), variant: TextVariant::Hint })
@@ -217,6 +224,7 @@ async fn render_post(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result
         })).await.into_iter().flatten().collect()
     };
 
+
     let layout = bag_lib::ui::Layout {
         top: vec![],
         main,
@@ -226,6 +234,10 @@ async fn render_post(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result
             Component::Text(Text {content: post.creator_id, variant: TextVariant::Body }),
             Component::Text(Text {content: "ID".to_owned(), variant: TextVariant::Hint }),
             Component::Text(Text {content: post.id.to_string(), variant: TextVariant::Body }),
+            Component::Text(Text {content: "Published".to_owned(), variant: TextVariant::Hint }),
+            Component::Text(Text {content: post.published_datetime.to_rfc3339(), variant: TextVariant::Body }),
+            Component::Text(Text {content: "Updated".to_owned(), variant: TextVariant::Hint }),
+            Component::Text(Text {content: post.updated_datetime.to_rfc3339(), variant: TextVariant::Body }),
         ],
         left: None,
         right: None,

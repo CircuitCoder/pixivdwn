@@ -97,6 +97,9 @@ pub struct FanboxPostDetail {
     pub title: String,
     pub creator_id: String,
 
+    pub published_datetime: chrono::DateTime<chrono::Utc>,
+    pub updated_datetime: chrono::DateTime<chrono::Utc>,
+
     pub body: Option<FanboxPostBody>,
 }
 
@@ -974,7 +977,7 @@ impl Database {
         id: u64,
     ) -> anyhow::Result<Option<FanboxPostDetail>> {
         let post = sqlx::query!(
-            "SELECT id, title, creator_id, body, is_body_rich FROM fanbox_posts WHERE id = ?",
+            "SELECT id, title, creator_id, body, is_body_rich, published_datetime as 'published_datetime: chrono::DateTime<chrono::Utc>', updated_datetime as 'updated_datetime: chrono::DateTime<chrono::Utc>' FROM fanbox_posts WHERE id = ?",
             id as i64
         )
         .fetch_one(&self.db)
@@ -994,6 +997,8 @@ impl Database {
             id: post.id as u64,
             title: post.title,
             creator_id: post.creator_id,
+            published_datetime: post.published_datetime,
+            updated_datetime: post.updated_datetime,
             body,
         }))
     }

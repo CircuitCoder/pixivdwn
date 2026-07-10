@@ -44,7 +44,18 @@ async fn render_creators(db: &crate::db::Database, path: Path<'_>) -> anyhow::Re
     });
     let layout = bag_lib::ui::Layout {
         top: vec![],
-        main: vec![gallery],
+        main: vec![
+            Component::Box(bag_lib::ui::Box {
+                horizontal: false,
+                children: vec![
+                    Component::Text(Text { content: "All".to_owned(), variant: TextVariant::Body, action: None }),
+                ],
+                action: Some(Action::Navigate {
+                    to: "fanbox/posts".to_owned(),
+                }),
+            }),
+            gallery
+        ],
         metadata: vec![],
         left: (!is_start).then(|| {
             let offset_str;
@@ -158,7 +169,7 @@ async fn render_post(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result
     async fn render_file(db: &crate::db::Database, id: &str) -> anyhow::Result<Vec<Component>> {
         let Some((file, ext)) = db.get_fanbox_file(id).await? else {
             return Ok(vec![
-                Component::Text(Text {content:format!("File not found: {}", id), variant: TextVariant::Hint })
+                Component::Text(Text {content:format!("File not found: {}", id), variant: TextVariant::Hint, action: None })
             ]);
         };
 
@@ -171,13 +182,13 @@ async fn render_post(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result
 
         if ext != "zip" {
             return Ok(vec![
-                Component::Text(Text {content:format!("File not supported: {}.{}", id, ext), variant: TextVariant::Hint })
+                Component::Text(Text {content:format!("File not supported: {}.{}", id, ext), variant: TextVariant::Hint, action: None })
             ]);
         }
 
         if !std::path::Path::new(&file).is_absolute() {
             return Ok(vec![
-                Component::Text(Text {content:format!("File path is not absolute: {}", file), variant: TextVariant::Hint })
+                Component::Text(Text {content:format!("File path is not absolute: {}", file), variant: TextVariant::Hint, action: None })
             ]);
         }
 
@@ -196,25 +207,25 @@ async fn render_post(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result
         }).await??;
 
         let mut ret = vec![
-            Component::Text(Text {content:format!("File {} contains {} files", id, files.len()), variant: TextVariant::Hint })
+            Component::Text(Text {content:format!("File {} contains {} files", id, files.len()), variant: TextVariant::Hint, action: None })
         ];
         // FIXME: actually renders the file recursively
         for file in files {
             let encoded = urlencoding::encode(&file);
-            ret.push(Component::Text(Text {content:format!("File: {}", file), variant: TextVariant::Hint }));
+            ret.push(Component::Text(Text {content:format!("File: {}", file), variant: TextVariant::Hint, action: None }));
             ret.push(Component::Image(Image { resource: format!("fanbox/file/{}?subpath={encoded}", id), mime: None }));
         }
         Ok(ret)
     }
 
     let main = match post.body {
-        None => vec![Component::Text(Text {content:"Not Fetched".to_string(), variant: TextVariant::Hint })],
+        None => vec![Component::Text(Text {content:"Not Fetched".to_string(), variant: TextVariant::Hint, action: None })],
         Some(crate::db::FanboxPostBody::SimpleOrLegacy(content)) => {
             // TODO: fetch all files
             let images = db.list_fanbox_post_images(post_id).await?;
             let files = db.list_fanbox_post_files(post_id).await?;
             let mut ret = vec![
-                Component::Text(Text {content, variant: TextVariant::Body }),
+                Component::Text(Text {content, variant: TextVariant::Body, action: None }),
             ];
             ret.extend(images.into_iter().map(|img| {
                 Component::Image(Image { resource: format!("fanbox/image/{}", img.id), mime: None })
@@ -228,17 +239,17 @@ async fn render_post(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result
         // Add box for files
         Some(crate::db::FanboxPostBody::Rich(body)) => futures::future::join_all(body.into_iter().map(async |e| match e {
             crate::data::fanbox::FetchPostBlock::Paragraph { text }
-                => vec![Component::Text(Text {content:text, variant: TextVariant::Body })],
+                => vec![Component::Text(Text {content:text, variant: TextVariant::Body, action: None })],
             crate::data::fanbox::FetchPostBlock::Header { text }
-                => vec![Component::Text(Text {content:text, variant: TextVariant::Title })],
+                => vec![Component::Text(Text {content:text, variant: TextVariant::Title, action: None })],
             crate::data::fanbox::FetchPostBlock::File { file_id }
-                => render_file(db, &file_id).await.unwrap_or(vec![Component::Text(Text {content:format!("File not found: {}", file_id), variant: TextVariant::Hint })]),
+                => render_file(db, &file_id).await.unwrap_or(vec![Component::Text(Text {content:format!("File not found: {}", file_id), variant: TextVariant::Hint, action: None })]),
             crate::data::fanbox::FetchPostBlock::Image { image_id }
                 => vec![Component::Image(Image { resource: format!("fanbox/image/{}", image_id), mime: None })],
             crate::data::fanbox::FetchPostBlock::Embed { embed_id: _, content }
-                => vec![Component::Text(Text {content:format!("Embed: {}", serde_json::to_string(&content).unwrap()), variant: TextVariant::Hint })],
+                => vec![Component::Text(Text {content:format!("Embed: {}", serde_json::to_string(&content).unwrap()), variant: TextVariant::Hint, action: None })],
             crate::data::fanbox::FetchPostBlock::UrlEmbed { url_embed_id: _, content }
-                => vec![Component::Text(Text {content:format!("URL Embed: {}", serde_json::to_string(&content).unwrap()), variant: TextVariant::Hint })],
+                => vec![Component::Text(Text {content:format!("URL Embed: {}", serde_json::to_string(&content).unwrap()), variant: TextVariant::Hint, action: None })],
         })).await.into_iter().flatten().collect()
     };
 
@@ -247,15 +258,17 @@ async fn render_post(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result
         top: vec![],
         main,
         metadata: vec![
-            Component::Text(Text {content: post.title, variant: TextVariant::Title }),
-            Component::Text(Text {content: "Creator".to_owned(), variant: TextVariant::Hint }),
-            Component::Text(Text {content: post.creator_id, variant: TextVariant::Body }),
-            Component::Text(Text {content: "ID".to_owned(), variant: TextVariant::Hint }),
-            Component::Text(Text {content: post.id.to_string(), variant: TextVariant::Body }),
-            Component::Text(Text {content: "Published".to_owned(), variant: TextVariant::Hint }),
-            Component::Text(Text {content: post.published_datetime.to_rfc3339(), variant: TextVariant::Body }),
-            Component::Text(Text {content: "Updated".to_owned(), variant: TextVariant::Hint }),
-            Component::Text(Text {content: post.updated_datetime.to_rfc3339(), variant: TextVariant::Body }),
+            Component::Text(Text {content: post.title, variant: TextVariant::Title, action: None }),
+            Component::Text(Text {content: "Creator".to_owned(), variant: TextVariant::Hint, action: None }),
+            Component::Text(Text {content: post.creator_id.clone(), variant: TextVariant::Body, action: Some(Action::Navigate {
+                to: format!("fanbox/posts,creator={}", post.creator_id)
+            })}),
+            Component::Text(Text {content: "ID".to_owned(), variant: TextVariant::Hint, action: None }),
+            Component::Text(Text {content: post.id.to_string(), variant: TextVariant::Body, action: None }),
+            Component::Text(Text {content: "Published".to_owned(), variant: TextVariant::Hint, action: None }),
+            Component::Text(Text {content: post.published_datetime.to_rfc3339(), variant: TextVariant::Body, action: None }),
+            Component::Text(Text {content: "Updated".to_owned(), variant: TextVariant::Hint, action: None }),
+            Component::Text(Text {content: post.updated_datetime.to_rfc3339(), variant: TextVariant::Body, action: None }),
         ],
         left: prev.map(|id| format!("{}/{}", parent_path, id)),
         right: next.map(|id| format!("{}/{}", parent_path, id)),

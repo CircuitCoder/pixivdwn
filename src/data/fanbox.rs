@@ -1,7 +1,13 @@
-use std::{collections::{HashMap, HashSet}, marker::PhantomData};
+use std::{
+    collections::{HashMap, HashSet},
+    marker::PhantomData,
+};
 
 use async_stream::try_stream;
-use serde::{Deserialize, Deserializer, Serialize, de::{MapAccess, Visitor}};
+use serde::{
+    Deserialize, Deserializer, Serialize,
+    de::{MapAccess, Visitor},
+};
 
 use crate::{
     config::Session,
@@ -110,10 +116,13 @@ impl FetchPostImage {
     pub fn guess_from_cover(cover: &str) -> Option<Self> {
         // Extract /<width>x<height>_ from url
         // Extract <id>.<ext> from last segment
-        regex::Regex::new(r"/(?P<width>\d+)x(?P<height>\d+)_[^/]+/.*/(?P<id>[^/.]+)\.(?P<ext>[^/.]+)$")
-            .ok()?
-            .captures(cover)
-            .and_then(|caps| Some(Self {
+        regex::Regex::new(
+            r"/(?P<width>\d+)x(?P<height>\d+)_[^/]+/.*/(?P<id>[^/.]+)\.(?P<ext>[^/.]+)$",
+        )
+        .ok()?
+        .captures(cover)
+        .and_then(|caps| {
+            Some(Self {
                 id: caps.name("id").unwrap().as_str().to_string(),
                 extension: caps.name("ext").unwrap().as_str().to_string(),
                 width: caps
@@ -124,7 +133,8 @@ impl FetchPostImage {
                     .and_then(|m| m.as_str().parse::<u64>().ok())?,
                 original_url: cover.to_string(),
                 thumbnail_url: cover.to_string(),
-            }))
+            })
+        })
     }
 }
 

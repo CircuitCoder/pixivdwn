@@ -145,8 +145,7 @@ impl Query {
                 "#,
                 match download_state {
                     QueryDownloadState::Full => "<=",
-                    QueryDownloadState::Missing
-                    | QueryDownloadState::Outdated => ">",
+                    QueryDownloadState::Missing | QueryDownloadState::Outdated => ">",
                     QueryDownloadState::Extra => "<",
                     QueryDownloadState::Exact => "=",
                 },

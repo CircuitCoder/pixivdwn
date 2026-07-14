@@ -3,8 +3,8 @@ mod config;
 mod data;
 mod db;
 mod fetch;
-mod util;
 mod serve;
+mod util;
 
 use std::path::PathBuf;
 

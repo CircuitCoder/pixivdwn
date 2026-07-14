@@ -3,7 +3,8 @@ use futures::StreamExt;
 use sqlx::AssertSqlSafe;
 
 use crate::{
-    data::fanbox::{FanboxRequest, FetchPostImage}, util::{
+    data::fanbox::{FanboxRequest, FetchPostImage},
+    util::{
         DatabasePathFormat, DownloadIdSrc, DownloadOverwriteBehavior, DownloadResult,
         TerminationCondition,
     },
@@ -120,12 +121,13 @@ impl FanboxSyncArgs {
             }
 
             for (idx, image) in body.images() {
-                let added = db.add_fanbox_image(detail.post.id, Some(idx), image).await?;
+                let added = db
+                    .add_fanbox_image(detail.post.id, Some(idx), image)
+                    .await?;
                 if added {
                     tracing::info!("  Added {}: image {}", idx, image.id);
                 }
             }
-
         }
 
         Ok(())
@@ -142,7 +144,11 @@ impl FanboxSyncArgs {
                 tracing::info!("  Added cover image {}", guessed.id);
             }
         } else {
-            tracing::warn!("Failed to guess cover image from url {} for post {}. Skipping", cover, id);
+            tracing::warn!(
+                "Failed to guess cover image from url {} for post {}. Skipping",
+                cover,
+                id
+            );
         }
 
         Ok(())
@@ -174,7 +180,11 @@ impl FanboxSyncArgs {
                 // Orig exists, so no FK violation. Update cover with URL in lists
                 if let Some(ref cover) = post.cover {
                     if cover.r#type != "cover_image" {
-                        tracing::warn!("Unexpected cover type {} for post {}. Skipping", cover.r#type, post.id);
+                        tracing::warn!(
+                            "Unexpected cover type {} for post {}. Skipping",
+                            cover.r#type,
+                            post.id
+                        );
                     } else {
                         Self::update_post_cover(db, post.id, &cover.url).await?;
                     }
@@ -204,7 +214,11 @@ impl FanboxSyncArgs {
         let mut creators: Vec<_> = self.src.creator.iter().map(|c| (None, c.clone())).collect();
         if !self.src.no_supported {
             let supported = crate::data::fanbox::fetch_supporting_list(session).await?;
-            creators.extend(supported.into_iter().map(|e| (e.creator.user, e.creator.creator_id)));
+            creators.extend(
+                supported
+                    .into_iter()
+                    .map(|e| (e.creator.user, e.creator.creator_id)),
+            );
         }
 
         if self.src.followed {
@@ -215,10 +229,7 @@ impl FanboxSyncArgs {
         for (user, id) in creators {
             tracing::info!(
                 "Syncing creator {} ({})",
-                user
-                    .as_ref()
-                    .map(|e| e.name.as_str())
-                    .unwrap_or("?"),
+                user.as_ref().map(|e| e.name.as_str()).unwrap_or("?"),
                 id
             );
             self.sync_creator(session, db, &id).await?;

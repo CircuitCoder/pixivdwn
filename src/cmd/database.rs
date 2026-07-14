@@ -132,7 +132,10 @@ impl FileFsckArgs {
                         "Missing fanbox image {} ({}_{}_{})",
                         p,
                         ent.id.1,
-                        ent.id.2.map(|e| e.to_string()).unwrap_or_else(|| "cover".to_string()),
+                        ent.id
+                            .2
+                            .map(|e| e.to_string())
+                            .unwrap_or_else(|| "cover".to_string()),
                         ent.id.0
                     );
                 }
@@ -201,11 +204,7 @@ impl FileCanonicalizeArgs {
                         .to_str()
                         .ok_or_else(|| anyhow::anyhow!("Failed to convert path"))?;
                     if !self.skip_db && !self.dry_run {
-                        db.update_image_path_move(
-                            &cur,
-                            Some(*new_path_str),
-                        )
-                        .await?;
+                        db.update_image_path_move(&cur, Some(*new_path_str)).await?;
                     }
                 }
             }

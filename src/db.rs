@@ -2,11 +2,14 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 use sqlx::{
-    QueryBuilder, Row, SqlSafeStr, SqlitePool, migrate::{Migrate, Migrator}, sqlite::{SqliteConnectOptions, SqliteRow},
+    QueryBuilder, Row, SqlSafeStr, SqlitePool,
+    migrate::{Migrate, Migrator},
+    sqlite::{SqliteConnectOptions, SqliteRow},
 };
 
 use crate::data::{
-    fanbox, pixiv::{IllustBookmarkTags, IllustState, UgoiraFrame},
+    fanbox,
+    pixiv::{IllustBookmarkTags, IllustState, UgoiraFrame},
 };
 
 struct TagIterator<I: Iterator<Item = u64> + Clone>(I);
@@ -132,7 +135,6 @@ pub struct Database {
     db: SqlitePool,
 }
 
-
 const DEFAULT_MIGRATION_TABLE: &'static str = "_sqlx_migrations";
 
 impl Database {
@@ -140,7 +142,8 @@ impl Database {
         let db = SqlitePool::connect(&url).await?;
 
         let mut conn = db.acquire().await?;
-        conn.ensure_migrations_table(DEFAULT_MIGRATION_TABLE).await?;
+        conn.ensure_migrations_table(DEFAULT_MIGRATION_TABLE)
+            .await?;
         let applied_migrations: HashMap<_, _> = conn
             .list_applied_migrations(DEFAULT_MIGRATION_TABLE)
             .await?
@@ -923,7 +926,12 @@ impl Database {
         Ok(rows_updated > 0)
     }
 
-    pub async fn list_fanbox_creators(&self, limit: i64, offset: i64, all: bool) -> anyhow::Result<Vec<String>> {
+    pub async fn list_fanbox_creators(
+        &self,
+        limit: i64,
+        offset: i64,
+        all: bool,
+    ) -> anyhow::Result<Vec<String>> {
         let recs = sqlx::query!(
             "SELECT DISTINCT creator_id FROM fanbox_posts WHERE (body IS NOT NULL OR ?) ORDER BY creator_id ASC LIMIT ? OFFSET ?",
             all, limit, offset
@@ -936,12 +944,20 @@ impl Database {
         Ok(recs)
     }
 
-    pub async fn list_fanbox_posts(&self, limit: i64, offset: i64, all: bool, creator: Option<&str>) -> anyhow::Result<Vec<FanboxPost>> {
-        let mut query = QueryBuilder::new(r#"
+    pub async fn list_fanbox_posts(
+        &self,
+        limit: i64,
+        offset: i64,
+        all: bool,
+        creator: Option<&str>,
+    ) -> anyhow::Result<Vec<FanboxPost>> {
+        let mut query = QueryBuilder::new(
+            r#"
             SELECT fanbox_posts.id as id, title, creator_id, fanbox_images.id as cover_id
             FROM fanbox_posts
             LEFT JOIN fanbox_images ON fanbox_posts.id = fanbox_images.post_id AND fanbox_images.idx IS NULL
-        "#);
+        "#,
+        );
 
         if !all {
             query.push(" WHERE body IS NOT NULL");
@@ -957,19 +973,24 @@ impl Database {
             query.push_bind(creator);
         }
 
-        query.push(" ORDER BY published_datetime DESC, CAST(fanbox_posts.id AS INTEGER) DESC LIMIT ");
+        query.push(
+            " ORDER BY published_datetime DESC, CAST(fanbox_posts.id AS INTEGER) DESC LIMIT ",
+        );
         query.push_bind(limit);
         query.push(" OFFSET ");
         query.push_bind(offset);
 
         let result = query.build().fetch_all(&self.db).await?;
 
-        Ok(result.into_iter().map(|r| FanboxPost {
-            id: r.get("id"),
-            title: r.get("title"),
-            creator_id: r.get("creator_id"),
-            cover_id: r.get("cover_id"),
-        }).collect())
+        Ok(result
+            .into_iter()
+            .map(|r| FanboxPost {
+                id: r.get("id"),
+                title: r.get("title"),
+                creator_id: r.get("creator_id"),
+                cover_id: r.get("cover_id"),
+            })
+            .collect())
     }
 
     pub async fn get_fanbox_post_siblings(
@@ -978,10 +999,12 @@ impl Database {
         all: bool,
         creator: Option<&str>,
     ) -> anyhow::Result<(Option<i64>, Option<i64>)> {
-        let mut prev_query = QueryBuilder::new(r#"
+        let mut prev_query = QueryBuilder::new(
+            r#"
             SELECT CAST(id AS INTEGER) AS id
             FROM fanbox_posts
-        "#);
+        "#,
+        );
 
         if !all {
             prev_query.push(" WHERE body IS NOT NULL");
@@ -1016,10 +1039,12 @@ impl Database {
             .await?
             .map(|row| row.get("id"));
 
-        let mut next_query = QueryBuilder::new(r#"
+        let mut next_query = QueryBuilder::new(
+            r#"
             SELECT CAST(id AS INTEGER) AS id
             FROM fanbox_posts
-        "#);
+        "#,
+        );
 
         if !all {
             next_query.push(" WHERE body IS NOT NULL");
@@ -1057,10 +1082,7 @@ impl Database {
         Ok((prev, next))
     }
 
-    pub async fn get_fanbox_post(
-        &self,
-        id: u64,
-    ) -> anyhow::Result<Option<FanboxPostDetail>> {
+    pub async fn get_fanbox_post(&self, id: u64) -> anyhow::Result<Option<FanboxPostDetail>> {
         let post = sqlx::query!(
             "SELECT id, title, creator_id, body, is_body_rich, published_datetime as 'published_datetime: chrono::DateTime<chrono::Utc>', updated_datetime as 'updated_datetime: chrono::DateTime<chrono::Utc>' FROM fanbox_posts WHERE id = ?",
             id as i64
@@ -1117,10 +1139,12 @@ impl Database {
     }
 
     pub async fn get_fanbox_image(&self, id: &str) -> anyhow::Result<Option<(String, String)>> {
-        Ok(sqlx::query!("SELECT path, ext FROM fanbox_images WHERE id = ?", id)
-            .fetch_optional(&self.db)
-            .await?
-            .and_then(|e| e.path.map(|p| (p, e.ext))))
+        Ok(
+            sqlx::query!("SELECT path, ext FROM fanbox_images WHERE id = ?", id)
+                .fetch_optional(&self.db)
+                .await?
+                .and_then(|e| e.path.map(|p| (p, e.ext))),
+        )
     }
 
     pub async fn list_fanbox_post_files(
@@ -1139,9 +1163,11 @@ impl Database {
     }
 
     pub async fn get_fanbox_file(&self, id: &str) -> anyhow::Result<Option<(String, String)>> {
-        Ok(sqlx::query!("SELECT path, ext FROM fanbox_files WHERE id = ?", id)
-            .fetch_optional(&self.db)
-            .await?
-            .and_then(|e| e.path.map(|p| (p, e.ext))))
+        Ok(
+            sqlx::query!("SELECT path, ext FROM fanbox_files WHERE id = ?", id)
+                .fetch_optional(&self.db)
+                .await?
+                .and_then(|e| e.path.map(|p| (p, e.ext))),
+        )
     }
 }

@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT path, ext FROM fanbox_files WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "path",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "fanbox_files",
+            "name": "path"
+          }
+        }
+      },
+      {
+        "name": "ext",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "fanbox_files",
+            "name": "ext"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "467b767e374f25f3a063ea534943ce9e92f4fe869cf596d7e5319e1c4b72dc66"
+}

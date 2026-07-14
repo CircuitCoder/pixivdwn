@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, title, creator_id, body, is_body_rich FROM fanbox_posts WHERE id = ?",
+  "query": "SELECT id, title, creator_id, body, is_body_rich, published_datetime as 'published_datetime: chrono::DateTime<chrono::Utc>', updated_datetime as 'updated_datetime: chrono::DateTime<chrono::Utc>' FROM fanbox_posts WHERE id = ?",
   "describe": {
     "columns": [
       {
@@ -57,6 +57,28 @@
             "name": "is_body_rich"
           }
         }
+      },
+      {
+        "name": "published_datetime: chrono::DateTime<chrono::Utc>",
+        "ordinal": 5,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "fanbox_posts",
+            "name": "published_datetime"
+          }
+        }
+      },
+      {
+        "name": "updated_datetime: chrono::DateTime<chrono::Utc>",
+        "ordinal": 6,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "fanbox_posts",
+            "name": "updated_datetime"
+          }
+        }
       }
     ],
     "parameters": {
@@ -67,8 +89,10 @@
       false,
       false,
       true,
-      true
+      true,
+      false,
+      false
     ]
   },
-  "hash": "658250c080505b5dce3ffbde36386b8accf03c98848c0fc91919fe173da9c39f"
+  "hash": "4da1d7e12eb30f4dd4d47bc0d2efe4a6dc1409b4c6e0d5d45f4b90fb64fdf194"
 }

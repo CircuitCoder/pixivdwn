@@ -63,7 +63,8 @@ pub async fn fetch<T: DeserializeOwned>(
     tracing::debug!("Headers: {:#?}", resp.headers());
     let text = resp.text().await?;
     tracing::debug!("Body: {}", text);
-    let json: T = serde_json::from_str(&text)?;
+    let mut json_de = serde_json::Deserializer::from_str(&text);
+    let json = serde_path_to_error::deserialize(&mut json_de)?;
     // let json = resp.json::<T>().await?;
     Ok(json)
 }

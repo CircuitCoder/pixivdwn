@@ -1,7 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}, marker::PhantomData};
 
 use async_stream::try_stream;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::{MapAccess, Visitor}};
 
 use crate::{
     config::Session,
@@ -515,11 +515,72 @@ impl<'a> RequestArgumenter for FanboxRequest<'a> {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(untagged)]
 pub enum Response<T> {
     Errored { error: String },
     Success { body: T },
+}
+
+impl<'de, T> Deserialize<'de> for Response<T>
+where
+    T: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // A custom visitor that carries the generic type T
+        struct ResponseVisitor<T>(PhantomData<T>);
+
+        impl<'de, T> Visitor<'de> for ResponseVisitor<T>
+        where
+            T: Deserialize<'de>,
+        {
+            type Value = Response<T>;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a map with exactly one key: either 'body' or 'error'")
+            }
+
+            fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                // 1. Fetch the first key
+                let first_key: Option<String> = map.next_key()?;
+
+                let key = match first_key {
+                    Some(k) => k,
+                    None => return Err(serde::de::Error::invalid_length(0, &"exactly one key")),
+                };
+
+                // 2. Deserialize the corresponding value
+                let response = match key.as_str() {
+                    "body" => {
+                        let body: T = map.next_value()?;
+                        Response::Success { body }
+                    }
+                    "error" => {
+                        let error: String = map.next_value()?;
+                        Response::Errored { error }
+                    }
+                    _ => return Err(serde::de::Error::unknown_field(&key, &["body", "error"])),
+                };
+
+                // 3. Verify there are no additional keys in the map
+                if let Some(second_key) = map.next_key::<String>()? {
+                    return Err(serde::de::Error::custom(format!(
+                        "Expected exactly one key, but found an extra key: '{}'",
+                        second_key
+                    )));
+                }
+
+                Ok(response)
+            }
+        }
+
+        // Tell the deserializer we are explicitly expecting a map
+        deserializer.deserialize_map(ResponseVisitor(PhantomData))
+    }
 }
 
 impl<T> Response<T> {
@@ -578,16 +639,20 @@ pub fn fetch_author_posts(
 }
 
 pub async fn fetch_post(session: &Session, post_id: u64) -> anyhow::Result<FetchPostDetail> {
+    #[derive(Deserialize, Debug)]
+    struct PostDetailRespWrapper {
+        post: FetchPostDetail,
+    }
     let url = format!("https://api.fanbox.cc/post.info?postId={}", post_id);
 
-    let json: Response<FetchPostDetail> = crate::fetch::fetch(|client| {
+    let json: Response<PostDetailRespWrapper> = crate::fetch::fetch(|client| {
         Ok(client
             .get(&url)
             .prepare_with(FanboxRequest(session))?
             .build()?)
     })
     .await?;
-    json.into_body()
+    json.into_body().map(|e| e.post)
 }
 
 #[derive(Deserialize, Debug)]
@@ -619,15 +684,19 @@ pub struct SupportedCreator {
 }
 
 pub async fn fetch_supporting_list(session: &Session) -> anyhow::Result<Vec<SupportedCreator>> {
+    #[derive(Deserialize, Debug)]
+    struct SupportingRespWrapper {
+        plans: Vec<SupportedCreator>,
+    }
     let url = "https://api.fanbox.cc/plan.listSupporting";
-    let json: Response<Vec<SupportedCreator>> = crate::fetch::fetch(|client| {
+    let json: Response<SupportingRespWrapper> = crate::fetch::fetch(|client| {
         Ok(client
             .get(url)
             .prepare_with(FanboxRequest(session))?
             .build()?)
     })
     .await?;
-    json.into_body()
+    json.into_body().map(|e| e.plans)
 }
 
 /**

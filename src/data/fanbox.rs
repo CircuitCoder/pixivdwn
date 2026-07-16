@@ -61,7 +61,6 @@ pub struct FetchPost {
     pub has_adult_content: bool,
     #[expect(unused)]
     pub excerpt: String,
-    #[expect(unused)]
     pub is_pinned: bool,
 }
 

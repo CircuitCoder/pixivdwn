@@ -190,7 +190,7 @@ impl FanboxSyncArgs {
                     }
                 }
 
-                if matches!(self.termination, TerminationCondition::OnHit) {
+                if matches!(self.termination, TerminationCondition::OnHit) && !post.is_pinned {
                     tracing::info!("Encountered an already existing post. Terminating.");
                     break;
                 } else {

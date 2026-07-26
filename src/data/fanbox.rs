@@ -605,12 +605,18 @@ pub async fn get_author_paginates(
     session: &Session,
     author_id: &str,
 ) -> anyhow::Result<Vec<String>> {
+    #[derive(Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    struct PaginateRespWrapper {
+        page_urls: Vec<String>,
+    }
+
     let url = format!(
         "https://api.fanbox.cc/post.paginateCreator?creatorId={}&sort=newest",
         author_id
     );
 
-    let json: Response<Vec<String>> = crate::fetch::fetch(|client| {
+    let json: Response<PaginateRespWrapper> = crate::fetch::fetch(|client| {
         Ok(client
             .get(&url)
             .prepare_with(FanboxRequest(session))?
@@ -618,7 +624,7 @@ pub async fn get_author_paginates(
     })
     .await?;
 
-    json.into_body()
+    json.into_body().map(|r| r.page_urls)
 }
 
 pub fn fetch_author_posts(
@@ -634,13 +640,20 @@ pub fn fetch_author_posts(
                 continue;
             }
 
+            #[derive(Deserialize, Debug)]
+            #[serde(rename_all = "camelCase")]
+            struct PostsRespWrapper {
+                posts: Vec<FetchPost>,
+            }
+
             // FIXME: assert url format
             tracing::info!("Fetching page {}/{}", page + 1, paginates.len());
 
-            let posts: Response<Vec<FetchPost>> = crate::fetch::fetch(|client| {
+
+            let posts: Response<PostsRespWrapper> = crate::fetch::fetch(|client| {
                 Ok(client.get(url).prepare_with(FanboxRequest(session))?.build()?)
             }).await?;
-            for post in posts.into_body()? {
+            for post in posts.into_body()?.posts {
                 yield post;
             }
         }

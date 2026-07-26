@@ -329,6 +329,7 @@ dependencies = [
 [[package]]
 name = "bag-fs"
 version = "0.1.0"
+source = "git+https://github.com/CircuitCoder/bag?rev=3d63d99feab77bafbd768fb082e2fdcb4549de1e#3d63d99feab77bafbd768fb082e2fdcb4549de1e"
 dependencies = [
  "axum",
  "ffmpeg-next",
@@ -344,6 +345,7 @@ dependencies = [
 [[package]]
 name = "bag-lib"
 version = "0.1.0"
+source = "git+https://github.com/CircuitCoder/bag?rev=3d63d99feab77bafbd768fb082e2fdcb4549de1e#3d63d99feab77bafbd768fb082e2fdcb4549de1e"
 dependencies = [
  "itertools 0.15.0",
  "serde",

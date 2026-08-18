@@ -3,8 +3,7 @@ use futures::StreamExt;
 use sqlx::AssertSqlSafe;
 
 use crate::{
-    data::fanbox::{FanboxRequest, FetchPostImage},
-    util::{
+    data::fanbox::{FanboxRequest, FetchPostImage}, util::{
         DatabasePathFormat, DownloadIdSrc, DownloadOverwriteBehavior, DownloadResult,
         TerminationCondition,
     },
@@ -64,6 +63,10 @@ pub struct FanboxSyncArgs {
     /// Exponential backoff base for retries
     #[arg(long)]
     retry_backoff: Option<usize>,
+
+    /// Guess cover image from URL in individual post fetch
+    #[arg(long)]
+    guess_cover: bool,
 }
 
 impl FanboxSyncArgs {
@@ -108,8 +111,21 @@ impl FanboxSyncArgs {
 
         tracing::info!("{} post {} - {}", prompt, id, detail.post.title);
 
-        if let Some(ref cover) = detail.cover_image_url {
-            Self::update_post_cover(db, id, cover).await?
+        if self.guess_cover {
+            if let Some(ref cover) = detail.cover_image_url {
+                if let Some(guessed) = FetchPostImage::guess_from_cover(cover) {
+                    Self::update_post_cover_standalone(db, id, &guessed).await?;
+                } else if let Some(image_id) = Self::guess_post_cover_shared(cover) {
+                    db.set_fanbox_post_cover(id, Some(image_id)).await?;
+                    tracing::info!("  Added cover image {} (shared)", image_id);
+                } else {
+                    tracing::warn!(
+                        "Failed to guess cover image from url {} for post {}. Skipping",
+                        cover,
+                        id,
+                    );
+                }
+            }
         }
 
         if let Some(ref mut body) = detail.body {
@@ -133,22 +149,28 @@ impl FanboxSyncArgs {
         Ok(())
     }
 
-    async fn update_post_cover(
+    fn guess_post_cover_shared(
+        url: &str
+    ) -> Option<&str> {
+        regex::Regex::new(
+            r"/images/post/[0-9]+/(?P<id>[^/.]+)\.(?P<ext>[^/.]+)$",
+        )
+        .ok()?
+        .captures(url)
+        .map(|caps| {
+            caps.name("id").unwrap().as_str()
+        })
+    }
+
+    async fn update_post_cover_standalone(
         db: &crate::db::Database,
         id: u64,
-        cover: &str,
+        image: &crate::data::fanbox::FetchPostImage,
     ) -> anyhow::Result<()> {
-        if let Some(guessed) = FetchPostImage::guess_from_cover(&cover) {
-            let added = db.add_fanbox_image(id, None, &guessed).await?;
-            if added {
-                tracing::info!("  Added cover image {}", guessed.id);
-            }
-        } else {
-            tracing::warn!(
-                "Failed to guess cover image from url {} for post {}. Skipping",
-                cover,
-                id
-            );
+        let added = db.add_fanbox_image(id, None, image).await?;
+        db.set_fanbox_post_cover(id, Some(&image.id)).await?;
+        if added {
+            tracing::info!("  Added cover image {} (standalone)", image.id);
         }
 
         Ok(())
@@ -180,8 +202,29 @@ impl FanboxSyncArgs {
                 // Orig exists, so no FK violation. Update cover with URL in lists
                 if let Some(ref cover) = post.cover {
                     match cover {
-                        crate::data::fanbox::FetchPostCover::CoverImage { url } =>
-                            Self::update_post_cover(db, post.id, url).await?,
+                        crate::data::fanbox::FetchPostCover::CoverImage { url } => {
+                            if let Some(guessed) = FetchPostImage::guess_from_cover(&url) {
+                                Self::update_post_cover_standalone(db, post.id, &guessed).await?;
+                            } else {
+                                tracing::warn!(
+                                    "Failed to guess cover image from url {} for post {}. Skipping",
+                                    url,
+                                    post.id,
+                                );
+                            }
+                        }
+                        crate::data::fanbox::FetchPostCover::PostImage { url } => {
+                            if let Some(image_id) = Self::guess_post_cover_shared(&url) {
+                                db.set_fanbox_post_cover(post.id, Some(image_id)).await?;
+                                tracing::info!("  Added cover image {} (shared)", image_id);
+                            } else {
+                                tracing::warn!(
+                                    "Failed to guess cover image from url {} for post {}. Skipping",
+                                    url,
+                                    post.id,
+                                );
+                            }
+                        }
                         crate::data::fanbox::FetchPostCover::Unknown { r#type, extra } => {
                             tracing::warn!(
                                 "Unknown cover type {} for post {}. Extra: {:?}. Skipping",

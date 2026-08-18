@@ -31,6 +31,10 @@ pub enum FetchPostCover {
         url: String,
     },
 
+    PostImage {
+        url: String,
+    },
+
     #[serde(untagged)]
     Unknown {
         r#type: String,
@@ -502,7 +506,7 @@ pub struct FetchPostDetail {
     #[serde(flatten)]
     pub post: FetchPost,
 
-    #[serde(rename = "camelCase")]
+    #[serde(rename = "coverImageUrl")]
     pub cover_image_url: Option<String>,
 
     pub body: Option<FetchPostBody>,

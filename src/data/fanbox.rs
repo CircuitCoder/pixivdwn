@@ -23,11 +23,21 @@ pub struct LinkedPixivUser {
     pub name: String,
 }
 
+// Tagged by "type"
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct FetchPostCover {
-    pub r#type: String,
-    pub url: String,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum FetchPostCover {
+    CoverImage {
+        url: String,
+    },
+
+    #[serde(untagged)]
+    Unknown {
+        r#type: String,
+
+        #[serde(flatten)]
+        extra: HashMap<String, serde_json::Value>,
+    }
 }
 
 #[derive(Deserialize, Debug)]

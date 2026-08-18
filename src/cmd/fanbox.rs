@@ -179,14 +179,17 @@ impl FanboxSyncArgs {
 
                 // Orig exists, so no FK violation. Update cover with URL in lists
                 if let Some(ref cover) = post.cover {
-                    if cover.r#type != "cover_image" {
-                        tracing::warn!(
-                            "Unexpected cover type {} for post {}. Skipping",
-                            cover.r#type,
-                            post.id
-                        );
-                    } else {
-                        Self::update_post_cover(db, post.id, &cover.url).await?;
+                    match cover {
+                        crate::data::fanbox::FetchPostCover::CoverImage { url } =>
+                            Self::update_post_cover(db, post.id, url).await?,
+                        crate::data::fanbox::FetchPostCover::Unknown { r#type, extra } => {
+                            tracing::warn!(
+                                "Unknown cover type {} for post {}. Extra: {:?}. Skipping",
+                                r#type,
+                                post.id,
+                                extra
+                            );
+                        }
                     }
                 }
 

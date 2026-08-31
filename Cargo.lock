@@ -334,8 +334,8 @@ dependencies = [
 
 [[package]]
 name = "bag-fs"
-version = "0.3.0"
-source = "git+https://github.com/CircuitCoder/bag?rev=v0.3.0#a6590b3617679816de432d3f27ddfcd5f319462f"
+version = "0.3.1"
+source = "git+https://github.com/CircuitCoder/bag?rev=v0.3.1#6b98be4aefc5ce68852d23ee51796b33a2c5a58e"
 dependencies = [
  "auto_enums",
  "axum",
@@ -354,8 +354,8 @@ dependencies = [
 
 [[package]]
 name = "bag-lib"
-version = "0.3.0"
-source = "git+https://github.com/CircuitCoder/bag?rev=v0.3.0#a6590b3617679816de432d3f27ddfcd5f319462f"
+version = "0.3.1"
+source = "git+https://github.com/CircuitCoder/bag?rev=v0.3.1#6b98be4aefc5ce68852d23ee51796b33a2c5a58e"
 dependencies = [
  "itertools 0.15.0",
  "serde",

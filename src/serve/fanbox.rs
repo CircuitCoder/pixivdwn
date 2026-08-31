@@ -528,7 +528,7 @@ fn append_path_segment<'a>(path: &Path<'a>, name: &str) -> Path<'a> {
 }
 
 fn archive_redirect(path: &Path<'_>) -> Response {
-    Json(LayoutOrAction::Action(Action::Navigate {
+    Json(LayoutOrAction::Action(Action::Redirect {
         to: append_path_segment(path, ":").to_string(),
     }))
     .into_response()

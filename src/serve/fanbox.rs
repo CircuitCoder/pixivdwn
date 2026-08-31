@@ -1,6 +1,7 @@
 use std::{
     borrow::Cow,
     io::{BufReader, Cursor, Read, Seek},
+    path::PathBuf,
 };
 
 use axum::{
@@ -125,47 +126,40 @@ fn owned_segment(segment: &Segment<'_>) -> Segment<'static> {
     )
 }
 
-fn stored_fs_path(stored_path: &str, tail: &[Segment<'_>]) -> Path<'static> {
-    let mut segments = stored_path
-        .split('/')
-        .map(|segment| Segment(Cow::Owned(segment.to_owned()), Default::default()))
-        .collect::<Vec<_>>();
-    segments.extend(tail.iter().map(owned_segment));
-    Path(Cow::Owned(segments))
-}
-
-fn archive_tail(subpath: Option<&str>) -> Result<Vec<Segment<'static>>, SegmentParseError> {
-    let Some(subpath) = subpath else {
-        return Ok(Vec::new());
-    };
-    let parsed = Path::try_from(subpath)?;
-    let mut tail = Vec::with_capacity(parsed.segments().len() + 1);
-    if parsed.first().is_none_or(|segment| segment.name() != ":") {
-        tail.push(Segment(Cow::Borrowed(":"), Default::default()));
+fn stored_fs_path(base: &std::path::Path, stored_path: &str) -> PathBuf {
+    let stored_path = PathBuf::from(stored_path);
+    if stored_path.is_absolute() {
+        stored_path
+    } else {
+        base.join(stored_path)
     }
-    tail.extend(parsed.segments().iter().map(owned_segment));
-    Ok(tail)
 }
 
-async fn fanbox_image_path(
-    db: &crate::db::Database,
-    id: &str,
-) -> anyhow::Result<Option<(Path<'static>, String)>> {
-    Ok(db
-        .get_fanbox_image(id)
-        .await?
-        .map(|(path, ext)| (stored_fs_path(&path, &[]), ext)))
+fn file_request_path(id: &str, subpath: Option<&str>) -> Result<Path<'static>, SegmentParseError> {
+    let mut segments = vec![Segment(Cow::Owned(id.to_owned()), Default::default())];
+    if let Some(subpath) = subpath {
+        let parsed = Path::try_from(subpath)?;
+        if parsed.first().is_none_or(|segment| segment.name() != ":") {
+            segments.push(Segment(Cow::Borrowed(":"), Default::default()));
+        }
+        segments.extend(parsed.segments().iter().map(owned_segment));
+    }
+    Ok(Path(Cow::Owned(segments)))
 }
 
-async fn fanbox_file_path(
-    db: &crate::db::Database,
-    id: &str,
-    tail: &[Segment<'_>],
-) -> anyhow::Result<Option<(Path<'static>, String)>> {
-    Ok(db
-        .get_fanbox_file(id)
-        .await?
-        .map(|(path, ext, _)| (stored_fs_path(&path, tail), ext)))
+fn split_request_path(path: &Path<'_>) -> (String, Path<'static>) {
+    let (db_path, subpath) = path.split_subpath(":");
+    (
+        db_path.to_bare_string(),
+        subpath.map_or_else(Path::empty, |path| path.to_static()),
+    )
+}
+
+fn media_filename(subpath: &Path<'_>, fallback: String) -> String {
+    subpath
+        .last()
+        .map(|segment| segment.name().to_owned())
+        .unwrap_or(fallback)
 }
 
 fn fs_error_response(error: bag_fs::Error) -> Response {
@@ -578,19 +572,19 @@ async fn render_archive(
     base: &std::path::Path,
     path: Path<'_>,
 ) -> anyhow::Result<Response> {
-    let Some(id) = path
-        .segments()
-        .get(2)
-        .map(|segment| segment.name().to_owned())
-    else {
+    let Some(request_path) = path.suffix(2) else {
         return Ok((axum::http::StatusCode::BAD_REQUEST, "Missing file ID").into_response());
     };
-    let tail = &path.segments()[3..];
-    let Some((fs_path, ext)) = fanbox_file_path(db, &id, tail).await? else {
+    let (id, subpath) = split_request_path(&request_path);
+    if id.is_empty() {
+        return Ok((axum::http::StatusCode::BAD_REQUEST, "Missing file ID").into_response());
+    }
+    let Some((stored_path, ext, _)) = db.get_fanbox_file(&id).await? else {
         return Ok((axum::http::StatusCode::NOT_FOUND, "File not found").into_response());
     };
+    let fs_path = stored_fs_path(base, &stored_path);
 
-    if tail.is_empty() {
+    if subpath.is_empty() {
         if is_archive_path(&format!("file.{ext}")) {
             return Ok(archive_redirect(&path));
         }
@@ -600,7 +594,7 @@ async fn render_archive(
         )
             .into_response());
     }
-    if tail.first().is_none_or(|segment| segment.name() != ":") {
+    if subpath.first().is_none_or(|segment| segment.name() != ":") {
         return Ok((
             axum::http::StatusCode::BAD_REQUEST,
             "Archive path must begin with an archive marker",
@@ -609,7 +603,7 @@ async fn render_archive(
     }
 
     let path = path.to_static();
-    let response = bag_fs::serve::serve(base, &fs_path, &HeaderMap::new(), async move |ctx| {
+    let response = bag_fs::serve::serve(&fs_path, &subpath, &HeaderMap::new(), async move |ctx| {
         let result = match open_archive_view(ctx.file).await {
             Ok(ArchiveView::Directory(mut listing)) => {
                 sort_archive_listing(&mut listing);
@@ -695,12 +689,9 @@ pub async fn render(
 async fn raw_file_response(
     base: &std::path::Path,
     path: &Path<'_>,
+    filename: String,
     headers: &HeaderMap,
 ) -> Response {
-    let filename = path
-        .last()
-        .map(|segment| segment.name().to_owned())
-        .unwrap_or_default();
     let mime = mime_guess::from_path(&filename).first_or_octet_stream();
     let request_headers = headers.clone();
 
@@ -731,8 +722,10 @@ async fn fanbox_image(
     axum::extract::Path(id): axum::extract::Path<String>,
     headers: HeaderMap,
 ) -> Response {
-    let path = match fanbox_image_path(&state.db, &id).await {
-        Ok(Some((path, _))) => path,
+    let request_path = file_request_path(&id, None).expect("a file ID is a valid path segment");
+    let (id, subpath) = split_request_path(&request_path);
+    let (stored_path, ext) = match state.db.get_fanbox_image(&id).await {
+        Ok(Some(source)) => source,
         Ok(None) => {
             return (
                 axum::http::StatusCode::NOT_FOUND,
@@ -748,9 +741,15 @@ async fn fanbox_image(
                 .into_response();
         }
     };
+    let fs_path = stored_fs_path(&state.fanbox_base, &stored_path);
+    let filename = media_filename(&subpath, format!("{id}.{ext}"));
 
-    tracing::info!("Serving fanbox image {} from path {}", id, path);
-    raw_file_response(&state.fanbox_base, &path, &headers).await
+    tracing::info!(
+        "Serving fanbox image {} from path {}",
+        id,
+        fs_path.display()
+    );
+    raw_file_response(&fs_path, &subpath, filename, &headers).await
 }
 
 #[derive(Deserialize)]
@@ -764,8 +763,8 @@ async fn fanbox_file(
     axum::extract::Query(query): axum::extract::Query<FileQuery>,
     headers: HeaderMap,
 ) -> Response {
-    let tail = match archive_tail(query.subpath.as_deref()) {
-        Ok(tail) => tail,
+    let request_path = match file_request_path(&id, query.subpath.as_deref()) {
+        Ok(path) => path,
         Err(error) => {
             return (
                 axum::http::StatusCode::BAD_REQUEST,
@@ -774,8 +773,9 @@ async fn fanbox_file(
                 .into_response();
         }
     };
-    let path = match fanbox_file_path(&state.db, &id, &tail).await {
-        Ok(Some((path, _))) => path,
+    let (id, subpath) = split_request_path(&request_path);
+    let (stored_path, ext, _) = match state.db.get_fanbox_file(&id).await {
+        Ok(Some(source)) => source,
         Ok(None) => {
             return (
                 axum::http::StatusCode::NOT_FOUND,
@@ -791,9 +791,11 @@ async fn fanbox_file(
                 .into_response();
         }
     };
+    let fs_path = stored_fs_path(&state.fanbox_base, &stored_path);
+    let filename = media_filename(&subpath, format!("{id}.{ext}"));
 
-    tracing::info!("Serving fanbox file {} from path {}", id, path);
-    raw_file_response(&state.fanbox_base, &path, &headers).await
+    tracing::info!("Serving fanbox file {} from path {}", id, fs_path.display());
+    raw_file_response(&fs_path, &subpath, filename, &headers).await
 }
 
 async fn fanbox_image_thumbnail(
@@ -801,6 +803,8 @@ async fn fanbox_image_thumbnail(
     axum::extract::Path(id): axum::extract::Path<String>,
     headers: HeaderMap,
 ) -> Response {
+    let request_path = file_request_path(&id, None).expect("a file ID is a valid path segment");
+    let (id, subpath) = split_request_path(&request_path);
     let (stored_path, ext, cached) = match state.db.get_fanbox_image_thumbnail(&id).await {
         Ok(Some(source)) => source,
         Ok(None) => {
@@ -812,13 +816,13 @@ async fn fanbox_image_thumbnail(
         }
         Err(error) => return thumbnail_internal_error("query image thumbnail", &id, error),
     };
-    let path = stored_fs_path(&stored_path, &[]);
+    let fs_path = stored_fs_path(&state.fanbox_base, &stored_path);
     let db = state.db.clone();
     let request_headers = headers.clone();
     let filename = format!("{id}.{ext}");
     let result = bag_fs::serve::serve(
-        &state.fanbox_base,
-        &path,
+        &fs_path,
+        &subpath,
         &headers,
         async move |RenderContext { file, etag }| {
             let thumbnail = if let Some(thumbnail) = cached {
@@ -863,8 +867,8 @@ async fn fanbox_file_thumbnail(
     axum::extract::Query(query): axum::extract::Query<FileQuery>,
     headers: HeaderMap,
 ) -> Response {
-    let tail = match archive_tail(query.subpath.as_deref()) {
-        Ok(tail) => tail,
+    let request_path = match file_request_path(&id, query.subpath.as_deref()) {
+        Ok(path) => path,
         Err(error) => {
             return (
                 axum::http::StatusCode::BAD_REQUEST,
@@ -873,8 +877,8 @@ async fn fanbox_file_thumbnail(
                 .into_response();
         }
     };
-    let cache_subpath =
-        (!tail.is_empty()).then(|| tail.iter().map(Segment::name).collect::<Vec<_>>().join("/"));
+    let (id, subpath) = split_request_path(&request_path);
+    let cache_subpath = (!subpath.is_empty()).then(|| subpath.to_bare_string());
     let (stored_path, ext, cached) = match state
         .db
         .get_fanbox_file_thumbnail(&id, cache_subpath.as_deref())
@@ -890,13 +894,9 @@ async fn fanbox_file_thumbnail(
         }
         Err(error) => return thumbnail_internal_error("query file thumbnail", &id, error),
     };
-    let path = stored_fs_path(&stored_path, &tail);
-    let media_path = tail
-        .last()
-        .map(Segment::name)
-        .map(str::to_owned)
-        .unwrap_or_else(|| format!("file.{ext}"));
-    if is_archive_path(&media_path) || path.last().is_some_and(|segment| segment.name() == ":") {
+    let fs_path = stored_fs_path(&state.fanbox_base, &stored_path);
+    let media_path = media_filename(&subpath, format!("file.{ext}"));
+    if is_archive_path(&media_path) || subpath.last().is_some_and(|segment| segment.name() == ":") {
         return (
             axum::http::StatusCode::BAD_REQUEST,
             "Archives do not have thumbnails",
@@ -908,8 +908,8 @@ async fn fanbox_file_thumbnail(
     let request_headers = headers.clone();
     let cache_subpath_for_log = cache_subpath.clone();
     let result = bag_fs::serve::serve(
-        &state.fanbox_base,
-        &path,
+        &fs_path,
+        &subpath,
         &headers,
         async move |RenderContext { file, etag }| {
             let thumbnail = if let Some(thumbnail) = cached {

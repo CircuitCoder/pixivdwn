@@ -41,7 +41,7 @@ pub enum FetchPostCover {
 
         #[serde(flatten)]
         extra: HashMap<String, serde_json::Value>,
-    }
+    },
 }
 
 #[derive(Deserialize, Debug)]

@@ -674,6 +674,22 @@ impl Database {
         Ok(rec)
     }
 
+    pub async fn set_fanbox_post_cover(
+        &self,
+        post_id: u64,
+        cover_id: Option<&str>,
+    ) -> anyhow::Result<()> {
+        let post_id = post_id as i64;
+        sqlx::query!(
+            r#"UPDATE fanbox_posts SET cover_id = ? WHERE id = ?"#,
+            cover_id,
+            post_id,
+        )
+        .execute(&self.db)
+        .await?;
+        Ok(())
+    }
+
     pub async fn add_fanbox_image(
         &self,
         post_id: u64,
@@ -953,9 +969,8 @@ impl Database {
     ) -> anyhow::Result<Vec<FanboxPost>> {
         let mut query = QueryBuilder::new(
             r#"
-            SELECT fanbox_posts.id as id, title, creator_id, fanbox_images.id as cover_id
+            SELECT fanbox_posts.id as id, title, creator_id, cover_id
             FROM fanbox_posts
-            LEFT JOIN fanbox_images ON fanbox_posts.id = fanbox_images.post_id AND fanbox_images.idx IS NULL
         "#,
         );
 
@@ -1147,6 +1162,35 @@ impl Database {
         )
     }
 
+    pub async fn get_fanbox_image_thumbnail(
+        &self,
+        id: &str,
+    ) -> anyhow::Result<Option<(String, String, Option<Vec<u8>>)>> {
+        Ok(sqlx::query!(
+            "SELECT path, ext, thumbnail FROM fanbox_images WHERE id = ?",
+            id
+        )
+        .fetch_optional(&self.db)
+        .await?
+        .and_then(|row| row.path.map(|path| (path, row.ext, row.thumbnail))))
+    }
+
+    pub async fn update_fanbox_image_thumbnail(
+        &self,
+        id: &str,
+        thumbnail: &[u8],
+    ) -> anyhow::Result<bool> {
+        let rows_updated = sqlx::query!(
+            "UPDATE fanbox_images SET thumbnail = ?, thumbnail_date = datetime('now', 'utc') WHERE id = ?",
+            thumbnail,
+            id
+        )
+        .execute(&self.db)
+        .await?
+        .rows_affected();
+        Ok(rows_updated > 0)
+    }
+
     pub async fn list_fanbox_post_files(
         &self,
         post_id: u64,
@@ -1162,12 +1206,61 @@ impl Database {
         Ok(result)
     }
 
-    pub async fn get_fanbox_file(&self, id: &str) -> anyhow::Result<Option<(String, String)>> {
+    pub async fn get_fanbox_file(
+        &self,
+        id: &str,
+    ) -> anyhow::Result<Option<(String, String, String)>> {
         Ok(
-            sqlx::query!("SELECT path, ext FROM fanbox_files WHERE id = ?", id)
+            sqlx::query!("SELECT path, ext, name FROM fanbox_files WHERE id = ?", id)
                 .fetch_optional(&self.db)
                 .await?
-                .and_then(|e| e.path.map(|p| (p, e.ext))),
+                .and_then(|e| e.path.map(|p| (p, e.ext, e.name))),
         )
+    }
+
+    pub async fn get_fanbox_file_thumbnail(
+        &self,
+        id: &str,
+        subpath: Option<&str>,
+    ) -> anyhow::Result<Option<(String, String, Option<Vec<u8>>)>> {
+        Ok(sqlx::query!(
+            r#"
+            SELECT fanbox_files.path, fanbox_files.ext, fanbox_file_thumbnails.thumbnail
+            FROM fanbox_files
+            LEFT JOIN fanbox_file_thumbnails
+                ON fanbox_file_thumbnails.file_id = fanbox_files.id
+                AND fanbox_file_thumbnails.subpath IS ?
+            WHERE fanbox_files.id = ?
+            "#,
+            subpath,
+            id
+        )
+        .fetch_optional(&self.db)
+        .await?
+        .and_then(|row| row.path.map(|path| (path, row.ext, row.thumbnail))))
+    }
+
+    pub async fn update_fanbox_file_thumbnail(
+        &self,
+        id: &str,
+        subpath: Option<&str>,
+        thumbnail: &[u8],
+    ) -> anyhow::Result<()> {
+        sqlx::query!(
+            r#"
+            INSERT INTO fanbox_file_thumbnails
+                (file_id, subpath, thumbnail, thumbnail_date)
+            VALUES (?, ?, ?, datetime('now', 'utc'))
+            ON CONFLICT DO UPDATE SET
+                thumbnail = excluded.thumbnail,
+                thumbnail_date = excluded.thumbnail_date
+            "#,
+            id,
+            subpath,
+            thumbnail
+        )
+        .execute(&self.db)
+        .await?;
+        Ok(())
     }
 }

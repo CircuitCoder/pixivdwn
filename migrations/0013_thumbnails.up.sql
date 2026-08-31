@@ -30,10 +30,18 @@ ALTER TABLE fanbox_images ADD COLUMN thumbnail_date DATETIME DEFAULT NULL
 
 -- Create a one-to-many table for files
 CREATE TABLE fanbox_file_thumbnails (
-    id TEXT PRIMARY KEY,
     file_id TEXT NOT NULL,
     subpath TEXT, -- Null stands for the whole file, not sure why a file can have a thumbnail
     thumbnail BLOB NOT NULL,
     thumbnail_date DATETIME NOT NULL,
     FOREIGN KEY (file_id) REFERENCES fanbox_files(id) ON DELETE CASCADE
 );
+
+-- SQLite considers NULL values distinct for ordinary UNIQUE constraints, so use
+-- partial indexes to enforce both cache-key variants.
+CREATE UNIQUE INDEX fanbox_file_thumbnails_file_subpath_idx
+    ON fanbox_file_thumbnails (file_id, subpath)
+    WHERE subpath IS NOT NULL;
+CREATE UNIQUE INDEX fanbox_file_thumbnails_whole_file_idx
+    ON fanbox_file_thumbnails (file_id)
+    WHERE subpath IS NULL;

@@ -6,7 +6,6 @@ use axum::{
     http::Uri,
     response::{IntoResponse, Response},
 };
-use bag_fs::fs::FsHandler;
 use bag_lib::path::{Path, SegmentParseError};
 use tower_http::cors::{Any, CorsLayer};
 
@@ -15,9 +14,7 @@ pub mod fanbox;
 #[derive(Clone)]
 pub struct ServeState {
     db: crate::db::Database,
-    #[allow(unused)]
     fanbox_base: PathBuf,
-    fanbox_fs: FsHandler,
 }
 
 macro_rules! unwrap_resp {
@@ -65,7 +62,7 @@ pub fn build(session: &crate::config::Session, db: crate::db::Database) -> anyho
             };
 
             if parsed.0.len() > 0 && parsed.0[0].0 == "fanbox" {
-                unwrap_resp!(fanbox::render(&state.db, parsed).await);
+                unwrap_resp!(fanbox::render(&state.db, &state.fanbox_base, parsed).await);
             }
 
             (
@@ -87,7 +84,6 @@ pub fn build(session: &crate::config::Session, db: crate::db::Database) -> anyho
         .with_state(ServeState {
             db,
             fanbox_base: fanbox_base.clone(),
-            fanbox_fs: FsHandler::new(fanbox_base.clone()),
         })
         .layer(cors))
 }

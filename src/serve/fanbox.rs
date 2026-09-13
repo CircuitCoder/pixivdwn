@@ -195,6 +195,7 @@ async fn render_creators(db: &crate::db::Database, path: Path<'_>) -> anyhow::Re
     }
 
     let gallery = Component::Gallery(Gallery {
+        can_order: false,
         images: creators
             .into_iter()
             .map(|creator| GalleryImage {
@@ -275,6 +276,7 @@ async fn render_list(db: &crate::db::Database, path: Path<'_>) -> anyhow::Result
     }
 
     let gallery = Component::Gallery(Gallery {
+        can_order: false,
         images: list
             .into_iter()
             .map(|post| GalleryImage {

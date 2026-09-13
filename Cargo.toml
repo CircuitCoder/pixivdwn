@@ -35,10 +35,10 @@ tracing-subscriber = "0.3.20"
 wreq = { version = "6.0.0-rc.29", features = ["json", "stream", "query", "gzip", "brotli", "deflate", "zstd"] }
 wreq-util = "3.0.0-rc.3"
 zip = "8.6.0"
-bag-lib = { git = "https://github.com/CircuitCoder/bag", rev = "v0.3.1" }
-bag-fs = { git = "https://github.com/CircuitCoder/bag", rev = "v0.3.1" }
+bag-lib = { git = "https://github.com/CircuitCoder/bag", rev = "v0.3.3" }
+bag-fs = { git = "https://github.com/CircuitCoder/bag", rev = "v0.3.3" }
 axum = "0.8.9"
-tower-http = { version = "0.5", features = ["cors", "compression-br"] }
+tower-http = { version = "0.6.8", features = ["cors", "compression-br"] }
 mime_guess = "2.0.5"
 alphanumeric-sort = "1.5.8"
 urlencoding = "2.1.3"

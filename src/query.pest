@@ -1,0 +1,12 @@
+WHITESPACE   =  _{ " " | "\t" | NEWLINE }
+
+query        =   { SOI ~ expr ~ EOI }
+  expr       =   { prefix? ~ primary ~ postfix? ~ (infix ~ prefix? ~ primary ~ postfix? )* }
+    infix    =  _{ and | or }
+      and    =   { "&&" }
+      or     =   { "||" }
+    prefix   =  _{ not }
+      not    =   { "!" }
+    primary  =  _{ int | "(" ~ expr ~ ")" }
+      tag    =  @{
+      int    =  @{ (ASCII_NONZERO_DIGIT ~ ASCII_DIGIT+ | ASCII_DIGIT) }

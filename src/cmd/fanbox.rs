@@ -3,7 +3,8 @@ use futures::StreamExt;
 use sqlx::AssertSqlSafe;
 
 use crate::{
-    data::fanbox::{FanboxRequest, FetchPostImage}, util::{
+    data::fanbox::{FanboxRequest, FetchPostImage},
+    util::{
         DatabasePathFormat, DownloadIdSrc, DownloadOverwriteBehavior, DownloadResult,
         TerminationCondition,
     },
@@ -149,17 +150,11 @@ impl FanboxSyncArgs {
         Ok(())
     }
 
-    fn guess_post_cover_shared(
-        url: &str
-    ) -> Option<&str> {
-        regex::Regex::new(
-            r"/images/post/[0-9]+/(?P<id>[^/.]+)\.(?P<ext>[^/.]+)$",
-        )
-        .ok()?
-        .captures(url)
-        .map(|caps| {
-            caps.name("id").unwrap().as_str()
-        })
+    fn guess_post_cover_shared(url: &str) -> Option<&str> {
+        regex::Regex::new(r"/images/post/[0-9]+/(?P<id>[^/.]+)\.(?P<ext>[^/.]+)$")
+            .ok()?
+            .captures(url)
+            .map(|caps| caps.name("id").unwrap().as_str())
     }
 
     async fn update_post_cover_standalone(

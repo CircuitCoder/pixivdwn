@@ -3,9 +3,9 @@ mod config;
 mod data;
 mod db;
 mod fetch;
+mod query;
 mod serve;
 mod util;
-mod query;
 
 use std::path::PathBuf;
 
